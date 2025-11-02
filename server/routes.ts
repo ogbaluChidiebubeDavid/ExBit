@@ -60,13 +60,25 @@ export async function registerRoutes(app: Express): Promise<Server> {
 
     try {
       const { bankName, accountNumber } = schema.parse(req.body);
+      
+      console.log(`[Validation] Attempting to validate account: ${accountNumber} at ${bankName}`);
 
       const result = await paystackService.validateBankAccount(accountNumber, bankName);
+      
+      console.log(`[Validation] Success: ${result.accountName}`);
 
       res.json({ accountName: result.accountName, verified: true });
     } catch (error: any) {
-      console.error("Account validation error:", error);
-      res.status(400).json({ error: error.message || "Failed to validate account" });
+      console.error("[Validation] Error details:", {
+        message: error.message,
+        response: error.response?.data,
+        status: error.response?.status,
+        bankName: req.body.bankName,
+        accountNumber: req.body.accountNumber
+      });
+      
+      const errorMessage = error.message || "Unable to fetch account details";
+      res.status(400).json({ error: errorMessage });
     }
   });
 

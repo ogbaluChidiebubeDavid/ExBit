@@ -23,8 +23,18 @@ export default function SwapPage() {
   const { toast } = useToast();
   const { walletAddress, isConnected } = useWallet();
   const [currentStep, setCurrentStep] = useState<SwapStep>(1);
-  const [blockchain, setBlockchain] = useState("ethereum");
-  const [selectedToken, setSelectedToken] = useState("USDT");
+  const [blockchain, setBlockchain] = useState(() => {
+    if (typeof window !== 'undefined') {
+      return localStorage.getItem('nairaswap_blockchain') || "ethereum";
+    }
+    return "ethereum";
+  });
+  const [selectedToken, setSelectedToken] = useState(() => {
+    if (typeof window !== 'undefined') {
+      return localStorage.getItem('nairaswap_token') || "USDT";
+    }
+    return "USDT";
+  });
   const [amount, setAmount] = useState("");
   const [bankName, setBankName] = useState("");
   const [accountNumber, setAccountNumber] = useState("");
@@ -33,6 +43,18 @@ export default function SwapPage() {
   const [isProcessingBlockchain, setIsProcessingBlockchain] = useState(false);
   const [tokenBalance, setTokenBalance] = useState<string>("0");
   const [isCorrectChain, setIsCorrectChain] = useState(false);
+
+  useEffect(() => {
+    if (typeof window !== 'undefined') {
+      localStorage.setItem('nairaswap_blockchain', blockchain);
+    }
+  }, [blockchain]);
+
+  useEffect(() => {
+    if (typeof window !== 'undefined') {
+      localStorage.setItem('nairaswap_token', selectedToken);
+    }
+  }, [selectedToken]);
 
   const { data: rates } = useQuery({
     queryKey: ["/api/rates"],

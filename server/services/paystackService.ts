@@ -88,8 +88,11 @@ export class PaystackService {
     try {
       const bankCode = BANK_CODES[bankName];
       if (!bankCode) {
-        throw new Error(`Bank code not found for ${bankName}`);
+        console.error(`[Paystack] Bank not found in codes: ${bankName}`);
+        throw new Error(`Bank "${bankName}" is not supported. Please select a valid Nigerian bank.`);
       }
+
+      console.log(`[Paystack] Resolving account ${accountNumber} for bank ${bankName} (code: ${bankCode})`);
 
       const response = await axios.get(
         `${this.baseUrl}/bank/resolve`,
@@ -102,6 +105,8 @@ export class PaystackService {
         }
       );
 
+      console.log(`[Paystack] Response status: ${response.data.status}`);
+
       if (response.data.status && response.data.data) {
         return {
           accountName: response.data.data.account_name,
@@ -109,10 +114,29 @@ export class PaystackService {
         };
       }
 
-      throw new Error("Invalid account details");
+      throw new Error("Could not verify account number. Please check the details and try again.");
     } catch (error: any) {
-      console.error("Paystack account validation error:", error.response?.data || error.message);
-      throw new Error(error.response?.data?.message || "Failed to validate account");
+      console.error("[Paystack] Validation error:", {
+        message: error.message,
+        response: error.response?.data,
+        status: error.response?.status,
+        accountNumber,
+        bankName
+      });
+
+      if (error.response?.data?.message) {
+        throw new Error(error.response.data.message);
+      }
+      
+      if (error.response?.status === 422) {
+        throw new Error("Invalid account number or bank details. Please verify and try again.");
+      }
+      
+      if (error.response?.status === 401) {
+        throw new Error("Payment service authentication failed. Please contact support.");
+      }
+
+      throw new Error(error.message || "Unable to verify account details at this time. Please try again.");
     }
   }
 
