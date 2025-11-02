@@ -116,12 +116,13 @@ Transaction {
 
 ## Real Integrations
 
-### Binance Public API (Free)
+### CoinGecko Public API (Free)
 - **Purpose**: Real-time cryptocurrency prices
-- **Endpoint**: `https://api.binance.com/api/v3/ticker/price`
-- **Rate Limit**: No authentication required, generous free tier
+- **Endpoint**: `https://api.coingecko.com/api/v3/simple/price`
+- **Rate Limit**: 30 calls/min, 10,000 calls/month (no auth required)
 - **Tokens**: ETH, BNB, MATIC, USDT, USDC, DAI, BUSD
-- **Note**: Has geographic restrictions; fallback prices used if blocked
+- **Direct NGN Pricing**: No USD intermediary conversion needed
+- **Advantages**: No geolocation restrictions, worldwide access, very reliable
 
 ### Paystack API (Requires Account)
 - **Purpose**: Nigerian bank account validation & Naira transfers
@@ -190,15 +191,21 @@ All components follow Shadcn UI patterns with custom styling:
 - Wallet connection button with address display
 
 ## Recent Changes
-- Nov 2, 2025: Production deployment ready
+- Nov 2, 2025: Production deployment ready + UX improvements
   - ✅ Integrated Ethers.js for Web3 wallet connections
   - ✅ Added multi-chain support with automatic network switching
   - ✅ Implemented real cryptocurrency transfers
-  - ✅ Integrated Binance API for live price feeds
+  - ✅ **Replaced Binance API with CoinGecko API** (no geolocation restrictions, direct NGN pricing)
   - ✅ Integrated Paystack API for bank validation and Naira transfers
   - ✅ Implemented 0.1% platform fee collection system
   - ✅ Added blockchain transaction hash tracking
   - ✅ Updated UI with wallet connection button
+  - ✅ **Added wallet balance display in token selector dropdown**
+  - ✅ **Added balance validation to prevent overdraft**
+  - ✅ **Implemented automatic network switching before balance checks**
+  - ✅ **Added transaction signing prompt** ("Please approve the transaction in your wallet")
+  - ✅ **Removed number input spinner buttons** (cleaner UI)
+  - ✅ **Lowered minimum swap to 0.01 tokens** (1 cent minimum)
   - ✅ Added transaction processing flow with MetaMask approval
   - ✅ Migrated from in-memory to PostgreSQL database
   - ✅ Configured all environment variables (wallet address + Paystack key)
@@ -276,9 +283,11 @@ The app is ready for testing with:
 
 ## Notes
 - **Database**: PostgreSQL with persistent storage - transactions survive restarts
-- **Binance API**: May be blocked in some regions; fallback prices are used
+- **CoinGecko API**: Free tier, no geolocation restrictions, direct NGN pricing
 - **Paystack**: Currently in test mode - switch to live keys for production
 - **Wallet Address**: Platform fees sent to 0xbe3496154fec589f393717f730ae4b9ddda8564f
+- **Balance Checking**: Automatic network switching ensures accurate balances
+- **Minimum Swap**: 0.01 tokens (1 cent) - perfect for testing and small swaps
 - **Testing**: All components have data-testid attributes for e2e testing
 - **Responsive**: Works on mobile, tablet, and desktop
 - **Requirements**: MetaMask or compatible Web3 wallet required for users
