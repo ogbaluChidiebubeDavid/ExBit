@@ -67,10 +67,10 @@ export default function SwapPage() {
     onSuccess: (data) => {
       setAccountName(data.accountName);
     },
-    onError: () => {
+    onError: (error: Error) => {
       toast({
         title: "Validation Failed",
-        description: "Could not verify account details",
+        description: error.message || "Could not verify account details",
         variant: "destructive",
       });
     },
