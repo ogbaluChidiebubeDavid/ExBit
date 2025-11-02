@@ -1,30 +1,5 @@
 import axios from "axios";
 
-interface PaystackBankAccount {
-  account_number: string;
-  account_name: string;
-  bank_code: string;
-}
-
-interface PaystackTransferRecipient {
-  recipient_code: string;
-  type: string;
-  name: string;
-  details: {
-    account_number: string;
-    account_name: string;
-    bank_code: string;
-    bank_name: string;
-  };
-}
-
-interface PaystackTransfer {
-  transfer_code: string;
-  reference: string;
-  status: string;
-  amount: number;
-}
-
 const BANK_CODES: Record<string, string> = {
   "Access Bank": "044",
   "Guaranty Trust Bank": "058",
@@ -46,15 +21,14 @@ const BANK_CODES: Record<string, string> = {
   "Kuda Bank": "50211",
   "Opay": "999992",
   "PalmPay": "999991",
-  "Test Bank (Paystack)": "001",
 };
 
-export class PaystackService {
+export class FlutterwaveService {
   private apiKey: string;
-  private baseUrl = "https://api.paystack.co";
+  private baseUrl = "https://api.flutterwave.com/v3";
 
   constructor(apiKey?: string) {
-    this.apiKey = apiKey || process.env.PAYSTACK_SECRET_KEY || "";
+    this.apiKey = apiKey || process.env.FLUTTERWAVE_SECRET_KEY || "";
   }
 
   private getHeaders() {
@@ -69,7 +43,7 @@ export class PaystackService {
     bankName: string
   ): Promise<{ accountName: string; accountNumber: string }> {
     if (!this.apiKey) {
-      console.warn("PAYSTACK_SECRET_KEY not set, using mock validation");
+      console.warn("FLUTTERWAVE_SECRET_KEY not set, using mock validation");
       const mockNames = [
         "CHIDERA OKONKWO",
         "OLUWASEUN WILLIAMS",
@@ -89,26 +63,24 @@ export class PaystackService {
     try {
       const bankCode = BANK_CODES[bankName];
       if (!bankCode) {
-        console.error(`[Paystack] Bank not found in codes: ${bankName}`);
+        console.error(`[Flutterwave] Bank not found in codes: ${bankName}`);
         throw new Error(`Bank "${bankName}" is not supported. Please select a valid Nigerian bank.`);
       }
 
-      console.log(`[Paystack] Resolving account ${accountNumber} for bank ${bankName} (code: ${bankCode})`);
+      console.log(`[Flutterwave] Resolving account for bank ${bankName} (code: ${bankCode})`);
 
-      const response = await axios.get(
-        `${this.baseUrl}/bank/resolve`,
+      const response = await axios.post(
+        `${this.baseUrl}/accounts/resolve`,
         {
-          params: {
-            account_number: accountNumber,
-            bank_code: bankCode,
-          },
-          headers: this.getHeaders(),
-        }
+          account_number: accountNumber,
+          account_bank: bankCode,
+        },
+        { headers: this.getHeaders() }
       );
 
-      console.log(`[Paystack] Response status: ${response.data.status}`);
+      console.log(`[Flutterwave] Response status: ${response.data.status}`);
 
-      if (response.data.status && response.data.data) {
+      if (response.data.status === "success" && response.data.data) {
         return {
           accountName: response.data.data.account_name,
           accountNumber: response.data.data.account_number,
@@ -117,11 +89,9 @@ export class PaystackService {
 
       throw new Error("Could not verify account number. Please check the details and try again.");
     } catch (error: any) {
-      console.error("[Paystack] Validation error:", {
+      console.error("[Flutterwave] Validation error:", {
         message: error.message,
-        response: error.response?.data,
         status: error.response?.status,
-        accountNumber,
         bankName
       });
 
@@ -136,22 +106,20 @@ export class PaystackService {
       if (error.response?.status === 401) {
         throw new Error("Payment service authentication failed. Please contact support.");
       }
-      
-      if (error.response?.status === 429) {
-        throw new Error("Daily test limit reached. Use 'Test Bank (Paystack)' with account number 0123456789 for unlimited testing, or switch to live mode.");
-      }
 
       throw new Error(error.message || "Unable to verify account details at this time. Please try again.");
     }
   }
 
-  async createTransferRecipient(
+  async initiateTransfer(
     accountNumber: string,
     accountName: string,
-    bankName: string
-  ): Promise<string> {
+    bankName: string,
+    amount: number,
+    reference: string
+  ): Promise<{ transferId: string; reference: string }> {
     if (!this.apiKey) {
-      throw new Error("PAYSTACK_SECRET_KEY is required for transfers");
+      throw new Error("FLUTTERWAVE_SECRET_KEY is required for transfers");
     }
 
     try {
@@ -160,84 +128,61 @@ export class PaystackService {
         throw new Error(`Bank code not found for ${bankName}`);
       }
 
+      console.log(`[Flutterwave] Initiating transfer of ₦${amount} to ${bankName}`);
+
       const response = await axios.post(
-        `${this.baseUrl}/transferrecipient`,
+        `${this.baseUrl}/transfers`,
         {
-          type: "nuban",
-          name: accountName,
+          account_bank: bankCode,
           account_number: accountNumber,
-          bank_code: bankCode,
+          amount,
           currency: "NGN",
-        },
-        { headers: this.getHeaders() }
-      );
-
-      if (response.data.status && response.data.data) {
-        return response.data.data.recipient_code;
-      }
-
-      throw new Error("Failed to create transfer recipient");
-    } catch (error: any) {
-      console.error("Paystack create recipient error:", error.response?.data || error.message);
-      throw new Error(error.response?.data?.message || "Failed to create transfer recipient");
-    }
-  }
-
-  async initiateTransfer(
-    recipientCode: string,
-    amount: number,
-    reference: string
-  ): Promise<{ transferCode: string; reference: string }> {
-    if (!this.apiKey) {
-      throw new Error("PAYSTACK_SECRET_KEY is required for transfers");
-    }
-
-    try {
-      const amountInKobo = Math.round(amount * 100);
-
-      const response = await axios.post(
-        `${this.baseUrl}/transfer`,
-        {
-          source: "balance",
-          amount: amountInKobo,
-          recipient: recipientCode,
+          narration: "ExBit crypto exchange",
           reference,
-          reason: "NairaSwap crypto exchange",
+          callback_url: "",
+          debit_currency: "NGN",
         },
         { headers: this.getHeaders() }
       );
 
-      if (response.data.status && response.data.data) {
+      console.log(`[Flutterwave] Transfer initiated successfully`);
+
+      if (response.data.status === "success" && response.data.data) {
         return {
-          transferCode: response.data.data.transfer_code,
+          transferId: response.data.data.id.toString(),
           reference: response.data.data.reference,
         };
       }
 
       throw new Error("Failed to initiate transfer");
     } catch (error: any) {
-      console.error("Paystack transfer error:", error.response?.data || error.message);
+      console.error("[Flutterwave] Transfer error:", {
+        message: error.message,
+        response: error.response?.data,
+        status: error.response?.status,
+      });
       throw new Error(error.response?.data?.message || "Failed to initiate transfer");
     }
   }
 
-  async verifyTransfer(reference: string): Promise<boolean> {
+  async verifyTransfer(transferId: string): Promise<boolean> {
     if (!this.apiKey) {
       return false;
     }
 
     try {
       const response = await axios.get(
-        `${this.baseUrl}/transfer/verify/${reference}`,
+        `${this.baseUrl}/transfers/${transferId}`,
         { headers: this.getHeaders() }
       );
 
-      return response.data.status && response.data.data.status === "success";
+      return response.data.status === "success" && 
+             (response.data.data.status === "SUCCESSFUL" || response.data.data.status === "success");
     } catch (error) {
-      console.error("Paystack verify transfer error:", error);
+      console.error("[Flutterwave] Verify transfer error:", error);
       return false;
     }
   }
 }
 
-export const paystackService = new PaystackService();
+export const flutterwaveService = new FlutterwaveService();

@@ -13,7 +13,7 @@ export function Header() {
       <div className="max-w-7xl mx-auto h-16 flex items-center justify-between gap-4">
         <Link href="/">
           <div className="text-2xl font-semibold text-foreground cursor-pointer hover-elevate px-2 py-1 rounded-md">
-            NairaSwap
+            ExBit
           </div>
         </Link>
         <div className="flex items-center gap-2">

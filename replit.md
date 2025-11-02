@@ -1,7 +1,7 @@
-# NairaSwap - Crypto to Naira Exchange Platform
+# ExBit - Crypto to Naira Exchange Platform
 
 ## Overview
-NairaSwap is a full-stack web application that allows users to swap cryptocurrency tokens to Nigerian Naira with direct bank account transfers using Web3 wallet connections. The platform features a clean, minimal interface inspired by relay.link, supporting multiple blockchain networks including Ethereum, BSC, Polygon, Arbitrum, and Base.
+ExBit is a full-stack web application that allows users to swap cryptocurrency tokens to Nigerian Naira with direct bank account transfers using Web3 wallet connections. The platform features a clean, minimal interface inspired by relay.link, supporting multiple blockchain networks including Ethereum, BSC, Polygon, Arbitrum, and Base.
 
 ## Current State
 **Status**: PRODUCTION READY - All integrations configured and database migrated
@@ -11,9 +11,9 @@ NairaSwap is a full-stack web application that allows users to swap cryptocurren
 - ✅ Web3 wallet connection (MetaMask & compatible wallets)
 - ✅ Multi-blockchain support with automatic network switching
 - ✅ Real cryptocurrency token transfers via blockchain
-- ✅ Real-time exchange rates from Binance Public API
-- ✅ Nigerian bank account validation via Paystack API
-- ✅ Automatic Naira transfers to user bank accounts via Paystack
+- ✅ Real-time exchange rates from CoinGecko Public API
+- ✅ Nigerian bank account validation via Flutterwave API
+- ✅ Automatic Naira transfers to user bank accounts via Flutterwave
 - ✅ 0.1% platform fee collection to owner wallet
 - ✅ Transaction history with blockchain tx hash tracking
 - ✅ Real-time transaction status updates
@@ -36,15 +36,16 @@ NairaSwap is a full-stack web application that allows users to swap cryptocurren
 - **Storage**: DatabaseStorage with persistent transaction history
 - **Validation**: Zod schemas
 - **External APIs**:
-  - Binance Public API (real-time crypto prices)
-  - Paystack API (bank validation & Naira transfers)
+  - CoinGecko Public API (real-time crypto prices)
+  - Flutterwave API (bank validation & Naira transfers)
 - **API Endpoints**:
-  - `GET /api/rates` - Fetch real-time exchange rates from Binance
-  - `POST /api/validate-account` - Validate Nigerian bank account via Paystack
+  - `GET /api/rates` - Fetch real-time exchange rates from CoinGecko
+  - `POST /api/validate-account` - Validate Nigerian bank account via Flutterwave
   - `POST /api/transactions` - Create new swap transaction record
   - `POST /api/transactions/:id/process` - Process blockchain tx and initiate Naira transfer
   - `GET /api/transactions/:id` - Get transaction by ID
   - `GET /api/transactions` - Get all transactions
+  - `GET /api/payment-status` - Check Flutterwave API key status
 
 ### Data Model
 ```typescript
@@ -62,7 +63,7 @@ Transaction {
   accountName: string
   userWalletAddress: string (user's crypto wallet)
   transactionHash: string (blockchain tx hash)
-  paystackReference: string (Paystack transfer reference)
+  flutterwaveReference: string (Flutterwave transfer reference)
   status: string (pending, processing, completed, failed)
   createdAt: timestamp
 }
@@ -83,8 +84,8 @@ Transaction {
 ### Backend
 - `server/routes.ts` - API route handlers with real integrations
 - `server/storage.ts` - Storage interface and in-memory implementation
-- `server/services/priceService.ts` - Binance API integration
-- `server/services/paystackService.ts` - Paystack API integration
+- `server/services/priceService.ts` - CoinGecko API integration
+- `server/services/flutterwaveService.ts` - Flutterwave API integration
 - `shared/schema.ts` - Shared TypeScript types and Zod schemas
 
 ### Configuration
@@ -98,7 +99,7 @@ Transaction {
 2. **Select Network**: Choose blockchain (Ethereum, BSC, Polygon, Arbitrum, Base)
 3. **Enter Amount**: Select token and input amount to swap
 4. **Bank Details**: Enter Nigerian bank name and account number
-   - Account is validated in real-time via Paystack API
+   - Account is validated in real-time via Flutterwave API
    - Real account name is fetched and displayed
 5. **Confirm Swap**: Review transaction details and confirm
    - MetaMask popup appears for transaction approval
@@ -107,8 +108,7 @@ Transaction {
    - Blockchain transaction is broadcast and confirmed
 6. **Processing**: Backend processes the swap
    - Verifies blockchain transaction
-   - Creates Paystack transfer recipient
-   - Initiates Naira transfer to user's bank account
+   - Initiates Naira transfer to user's bank account via Flutterwave
 7. **Completion**: Real-time status updates
    - Transaction hash displayed with blockchain explorer link
    - Naira transfer reference tracked
@@ -124,14 +124,14 @@ Transaction {
 - **Direct NGN Pricing**: No USD intermediary conversion needed
 - **Advantages**: No geolocation restrictions, worldwide access, very reliable
 
-### Paystack API (Requires Account)
+### Flutterwave API (Unregistered Business Account)
 - **Purpose**: Nigerian bank account validation & Naira transfers
 - **Endpoints**:
-  - Bank Account Resolution API (validate account details)
-  - Transfer Recipient API (create transfer recipients)
-  - Initiate Transfer API (send Naira to bank accounts)
-- **Setup**: Requires `PAYSTACK_SECRET_KEY` from dashboard
-- **Documentation**: https://paystack.com/docs
+  - Account Resolution API (validate account details)
+  - Transfers API (send Naira to bank accounts directly)
+- **Setup**: Requires `FLUTTERWAVE_SECRET_KEY` from dashboard
+- **Documentation**: https://developer.flutterwave.com/
+- **Advantages**: Works with unregistered businesses, no business registration required
 - **Test Mode**: Available for development/testing
 
 ### Web3 Wallet Integration
@@ -147,7 +147,7 @@ Transaction {
 ## Environment Variables
 
 ### Configured ✅
-- `PAYSTACK_SECRET_KEY` - Paystack API secret key for bank operations ✅
+- `FLUTTERWAVE_SECRET_KEY` - Flutterwave API secret key for bank operations ✅
 - `OWNER_WALLET_ADDRESS` - Your crypto wallet address (0xbe3496154fec589f393717f730ae4b9ddda8564f) ✅
 - `VITE_OWNER_WALLET_ADDRESS` - Same as above, for frontend access ✅
 - `DATABASE_URL` - PostgreSQL connection string ✅
@@ -191,12 +191,19 @@ All components follow Shadcn UI patterns with custom styling:
 - Wallet connection button with address display
 
 ## Recent Changes
+- Nov 2, 2025: **Switched to Flutterwave + Rebranded to ExBit**
+  - ✅ **Replaced Paystack with Flutterwave API** (works with unregistered businesses!)
+  - ✅ **Rebranded from NairaSwap to ExBit**
+  - ✅ Updated all branding across the application
+  - ✅ Created new Flutterwave service for bank validation and transfers
+  - ✅ Updated API endpoints to use Flutterwave
+  - ✅ Simplified transfer flow (no transfer recipient creation needed)
+
 - Nov 2, 2025: Production deployment ready + UX improvements
   - ✅ Integrated Ethers.js for Web3 wallet connections
   - ✅ Added multi-chain support with automatic network switching
   - ✅ Implemented real cryptocurrency transfers
   - ✅ **Replaced Binance API with CoinGecko API** (no geolocation restrictions, direct NGN pricing)
-  - ✅ Integrated Paystack API for bank validation and Naira transfers
   - ✅ Implemented 0.1% platform fee collection system
   - ✅ Added blockchain transaction hash tracking
   - ✅ Updated UI with wallet connection button
@@ -208,19 +215,19 @@ All components follow Shadcn UI patterns with custom styling:
   - ✅ **Lowered minimum swap to 0.01 tokens** (1 cent minimum)
   - ✅ Added transaction processing flow with MetaMask approval
   - ✅ Migrated from in-memory to PostgreSQL database
-  - ✅ Configured all environment variables (wallet address + Paystack key)
   - ✅ Transaction history now persists across restarts
 
 ## Production Status ✅
 
 All core features are production-ready:
-- ✅ API keys configured (Paystack test mode)
+- ✅ API keys configured (Flutterwave live mode)
 - ✅ Wallet address configured for fee collection
 - ✅ PostgreSQL database with persistent storage
 - ✅ All transactions saved to database
 - ✅ Real-time blockchain integration with MetaMask
-- ✅ Bank account validation via Paystack
+- ✅ Bank account validation via Flutterwave
 - ✅ Automatic Naira transfers to user accounts
+- ✅ **No business registration required** (Flutterwave unregistered account)
 
 ## Optional Enhancements
 
@@ -229,7 +236,7 @@ All core features are production-ready:
    - Implement transaction amount limits
    - Add fraud detection for suspicious transactions
    - Implement KYC verification for large amounts
-   - Add webhook verification for Paystack callbacks
+   - Add webhook verification for Flutterwave callbacks
 
 4. **Advanced Features**
    - Transaction receipts with PDF download
@@ -258,7 +265,7 @@ Server runs on port 5000 with both frontend and backend.
 The app is ready for testing with:
 1. MetaMask installed
 2. Test tokens on testnets (Sepolia, BSC Testnet, etc.)
-3. Paystack test mode API keys
+3. Flutterwave test mode API keys
 
 ### Project Structure
 ```
@@ -275,7 +282,7 @@ The app is ready for testing with:
 │   ├── storage.ts       # Data storage layer
 │   └── services/        # External API integrations
 │       ├── priceService.ts
-│       └── paystackService.ts
+│       └── flutterwaveService.ts
 ├── shared/              # Shared types and schemas
 │   └── schema.ts
 └── design_guidelines.md # Design system documentation
@@ -284,7 +291,7 @@ The app is ready for testing with:
 ## Notes
 - **Database**: PostgreSQL with persistent storage - transactions survive restarts
 - **CoinGecko API**: Free tier, no geolocation restrictions, direct NGN pricing
-- **Paystack**: Currently in test mode - switch to live keys for production
+- **Flutterwave**: Live mode configured, works with unregistered businesses
 - **Wallet Address**: Platform fees sent to 0xbe3496154fec589f393717f730ae4b9ddda8564f
 - **Balance Checking**: Automatic network switching ensures accurate balances
 - **Minimum Swap**: 0.01 tokens (1 cent) - perfect for testing and small swaps

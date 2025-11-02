@@ -19,7 +19,7 @@ export const transactions = pgTable("transactions", {
   accountName: text("account_name"),
   userWalletAddress: text("user_wallet_address"),
   transactionHash: text("transaction_hash"),
-  paystackReference: text("paystack_reference"),
+  flutterwaveReference: text("flutterwave_reference"),
   status: text("status").notNull().default("pending"),
   createdAt: timestamp("created_at").defaultNow().notNull(),
 });

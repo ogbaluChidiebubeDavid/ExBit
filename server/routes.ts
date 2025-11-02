@@ -4,10 +4,10 @@ import { storage } from "./storage";
 import { insertTransactionSchema } from "@shared/schema";
 import { z } from "zod";
 import { priceService } from "./services/priceService";
-import { paystackService } from "./services/paystackService";
+import { flutterwaveService } from "./services/flutterwaveService";
 
 export async function registerRoutes(app: Express): Promise<Server> {
-  // Get exchange rates from Binance API
+  // Get exchange rates from CoinGecko API
   app.get("/api/rates", async (req, res) => {
     try {
       const allPrices = await priceService.getAllPrices();
@@ -51,29 +51,29 @@ export async function registerRoutes(app: Express): Promise<Server> {
     }
   });
 
-  // Diagnostic endpoint to check Paystack key status
-  app.get("/api/paystack-status", async (req, res) => {
-    const apiKey = process.env.PAYSTACK_SECRET_KEY;
+  // Diagnostic endpoint to check Flutterwave key status
+  app.get("/api/payment-status", async (req, res) => {
+    const apiKey = process.env.FLUTTERWAVE_SECRET_KEY;
     
     if (!apiKey) {
       return res.json({
         status: "missing",
-        message: "PAYSTACK_SECRET_KEY is not set",
+        message: "FLUTTERWAVE_SECRET_KEY is not set",
       });
     }
 
-    const keyType = apiKey.startsWith("sk_live_") ? "live" : apiKey.startsWith("sk_test_") ? "test" : "unknown";
-    const maskedKey = apiKey.slice(0, 12) + "..." + apiKey.slice(-4);
+    const keyType = apiKey.startsWith("FLWSECK-") ? "configured" : "unknown";
+    const maskedKey = apiKey.slice(0, 15) + "..." + apiKey.slice(-4);
     
     res.json({
       status: "configured",
       keyType,
       maskedKey,
-      message: `Paystack API key is set (${keyType} mode)`,
+      message: `Flutterwave API key is configured`,
     });
   });
 
-  // Validate bank account using Paystack API
+  // Validate bank account using Flutterwave API
   app.post("/api/validate-account", async (req, res) => {
     const schema = z.object({
       bankName: z.string(),
@@ -83,21 +83,18 @@ export async function registerRoutes(app: Express): Promise<Server> {
     try {
       const { bankName, accountNumber } = schema.parse(req.body);
       
-      console.log(`[Validation] Attempting to validate account: ${accountNumber} at ${bankName}`);
-      console.log(`[Validation] API Key type: ${process.env.PAYSTACK_SECRET_KEY?.startsWith("sk_live_") ? "LIVE" : "TEST"}`);
+      console.log(`[Validation] Attempting to validate account at ${bankName}`);
 
-      const result = await paystackService.validateBankAccount(accountNumber, bankName);
+      const result = await flutterwaveService.validateBankAccount(accountNumber, bankName);
       
-      console.log(`[Validation] Success: ${result.accountName}`);
+      console.log(`[Validation] Account validation successful`);
 
       res.json({ accountName: result.accountName, verified: true });
     } catch (error: any) {
       console.error("[Validation] Error details:", {
         message: error.message,
-        response: error.response?.data,
         status: error.response?.status,
-        bankName: req.body.bankName,
-        accountNumber: req.body.accountNumber
+        bankName: req.body.bankName
       });
       
       const errorMessage = error.message || "Unable to fetch account details";
@@ -156,22 +153,18 @@ export async function registerRoutes(app: Express): Promise<Server> {
             return;
           }
 
-          const recipientCode = await paystackService.createTransferRecipient(
-            transaction.accountNumber,
-            transaction.accountName,
-            transaction.bankName
-          );
-
           const netNairaAmount = parseFloat(transaction.netNairaAmount);
 
-          const transferResult = await paystackService.initiateTransfer(
-            recipientCode,
+          const transferResult = await flutterwaveService.initiateTransfer(
+            transaction.accountNumber,
+            transaction.accountName,
+            transaction.bankName,
             netNairaAmount,
-            `nairaswap-${transaction.id}`
+            `exbit-${transaction.id}`
           );
 
           await storage.updateTransaction(req.params.id, {
-            paystackReference: transferResult.reference,
+            flutterwaveReference: transferResult.reference,
             status: "completed",
           });
         } catch (error: any) {

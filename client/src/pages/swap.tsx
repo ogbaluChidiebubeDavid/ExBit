@@ -25,13 +25,13 @@ export default function SwapPage() {
   const [currentStep, setCurrentStep] = useState<SwapStep>(1);
   const [blockchain, setBlockchain] = useState(() => {
     if (typeof window !== 'undefined') {
-      return localStorage.getItem('nairaswap_blockchain') || "ethereum";
+      return localStorage.getItem('exbit_blockchain') || "ethereum";
     }
     return "ethereum";
   });
   const [selectedToken, setSelectedToken] = useState(() => {
     if (typeof window !== 'undefined') {
-      return localStorage.getItem('nairaswap_token') || "USDT";
+      return localStorage.getItem('exbit_token') || "USDT";
     }
     return "USDT";
   });
@@ -46,13 +46,13 @@ export default function SwapPage() {
 
   useEffect(() => {
     if (typeof window !== 'undefined') {
-      localStorage.setItem('nairaswap_blockchain', blockchain);
+      localStorage.setItem('exbit_blockchain', blockchain);
     }
   }, [blockchain]);
 
   useEffect(() => {
     if (typeof window !== 'undefined') {
-      localStorage.setItem('nairaswap_token', selectedToken);
+      localStorage.setItem('exbit_token', selectedToken);
     }
   }, [selectedToken]);
 
