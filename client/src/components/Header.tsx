@@ -1,4 +1,5 @@
 import { ThemeToggle } from "./ThemeToggle";
+import { WalletButton } from "./WalletButton";
 import { Button } from "@/components/ui/button";
 import { History } from "lucide-react";
 import { Link, useLocation } from "wouter";
@@ -9,7 +10,7 @@ export function Header() {
 
   return (
     <header className="w-full border-b px-4 md:px-6">
-      <div className="max-w-7xl mx-auto h-16 flex items-center justify-between">
+      <div className="max-w-7xl mx-auto h-16 flex items-center justify-between gap-4">
         <Link href="/">
           <div className="text-2xl font-semibold text-foreground cursor-pointer hover-elevate px-2 py-1 rounded-md">
             NairaSwap
@@ -24,6 +25,7 @@ export function Header() {
               </Button>
             </Link>
           )}
+          <WalletButton />
           <ThemeToggle />
         </div>
       </div>

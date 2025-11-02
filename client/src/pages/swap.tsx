@@ -14,11 +14,14 @@ import { Button } from "@/components/ui/button";
 import { TOKEN_INFO } from "@/lib/constants";
 import { api } from "@/lib/api";
 import { useToast } from "@/hooks/use-toast";
+import { useWallet } from "@/hooks/useWallet";
+import { web3Service } from "@/lib/web3";
 
 type SwapStep = 1 | 2 | 3 | 4 | 5;
 
 export default function SwapPage() {
   const { toast } = useToast();
+  const { walletAddress, isConnected } = useWallet();
   const [currentStep, setCurrentStep] = useState<SwapStep>(1);
   const [blockchain, setBlockchain] = useState("ethereum");
   const [selectedToken, setSelectedToken] = useState("USDT");
@@ -27,6 +30,7 @@ export default function SwapPage() {
   const [accountNumber, setAccountNumber] = useState("");
   const [accountName, setAccountName] = useState("");
   const [transactionId, setTransactionId] = useState("");
+  const [isProcessingBlockchain, setIsProcessingBlockchain] = useState(false);
 
   const { data: rates } = useQuery({
     queryKey: ["/api/rates"],
@@ -97,7 +101,12 @@ export default function SwapPage() {
 
   const calculateFee = () => {
     const nairaAmount = calculateNaira();
-    return nairaAmount * 0.005;
+    return nairaAmount * 0.001;
+  };
+
+  const calculateCryptoFee = () => {
+    const numAmount = parseFloat(amount) || 0;
+    return numAmount * 0.001;
   };
 
   const canProceedFromStep1 = blockchain && selectedToken;
@@ -114,22 +123,78 @@ export default function SwapPage() {
     }
   };
 
-  const handleConfirmSwap = () => {
-    const nairaAmount = calculateNaira();
-    const fee = calculateFee();
-    const netAmount = nairaAmount - fee;
+  const handleConfirmSwap = async () => {
+    if (!isConnected || !walletAddress) {
+      toast({
+        title: "Wallet Not Connected",
+        description: "Please connect your wallet to continue",
+        variant: "destructive",
+      });
+      return;
+    }
 
-    createTransaction.mutate({
-      blockchain,
-      token: selectedToken,
-      amount,
-      nairaAmount: netAmount.toFixed(2),
-      exchangeRate: getCurrentRate().toFixed(2),
-      bankName,
-      accountNumber,
-      accountName,
-      status: "pending",
-    });
+    setIsProcessingBlockchain(true);
+
+    try {
+      await web3Service.switchChain(blockchain);
+
+      const ownerWalletAddress = import.meta.env.VITE_OWNER_WALLET_ADDRESS;
+      if (!ownerWalletAddress) {
+        throw new Error("Owner wallet address not configured. Please set VITE_OWNER_WALLET_ADDRESS in environment variables.");
+      }
+
+      const cryptoFee = calculateCryptoFee();
+      const netCryptoAmount = parseFloat(amount) - cryptoFee;
+
+      const txHash = await web3Service.sendToken(
+        blockchain,
+        selectedToken,
+        ownerWalletAddress,
+        amount
+      );
+
+      toast({
+        title: "Transaction Sent",
+        description: "Processing your swap...",
+      });
+
+      const totalNairaValue = calculateNaira();
+      const platformFeeNaira = totalNairaValue * 0.001;
+      const netNairaAmount = totalNairaValue - platformFeeNaira;
+
+      const transaction = await api.createTransaction({
+        blockchain,
+        token: selectedToken,
+        amount,
+        nairaAmount: totalNairaValue.toFixed(2),
+        exchangeRate: getCurrentRate().toFixed(2),
+        platformFee: cryptoFee.toFixed(8),
+        platformFeeNaira: platformFeeNaira.toFixed(2),
+        netAmount: netCryptoAmount.toFixed(8),
+        netNairaAmount: netNairaAmount.toFixed(2),
+        bankName,
+        accountNumber,
+        accountName,
+        userWalletAddress: walletAddress,
+        status: "pending",
+      });
+
+      setTransactionId(transaction.id);
+
+      await api.processTransaction(transaction.id, txHash);
+
+      setCurrentStep(5);
+      queryClient.invalidateQueries({ queryKey: ["/api/transactions"] });
+    } catch (error: any) {
+      console.error("Swap error:", error);
+      toast({
+        title: "Swap Failed",
+        description: error.message || "Failed to process swap",
+        variant: "destructive",
+      });
+    } finally {
+      setIsProcessingBlockchain(false);
+    }
   };
 
   const handleNewSwap = () => {
@@ -275,7 +340,7 @@ export default function SwapPage() {
                 accountName={accountName}
                 onConfirm={handleConfirmSwap}
                 onBack={() => setCurrentStep(3)}
-                isProcessing={createTransaction.isPending}
+                isProcessing={isProcessingBlockchain}
               />
             )}
 
@@ -292,7 +357,7 @@ export default function SwapPage() {
                     transactionId={transactionId}
                     cryptoAmount={amount}
                     cryptoSymbol={selectedToken}
-                    nairaAmount={calculateNaira() - calculateFee()}
+                    nairaAmount={currentTransaction.netNairaAmount}
                     onNewSwap={handleNewSwap}
                   />
                 )}
@@ -300,9 +365,12 @@ export default function SwapPage() {
             )}
           </Card>
 
-          <div className="mt-6 text-center">
+          <div className="mt-6 text-center space-y-2">
             <p className="text-xs text-muted-foreground">
               Secure • Fast • Reliable
+            </p>
+            <p className="text-xs text-muted-foreground">
+              Platform fee: 0.1% • All fees go to app maintenance
             </p>
           </div>
         </div>

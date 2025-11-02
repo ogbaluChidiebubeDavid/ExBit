@@ -24,7 +24,23 @@ export const api = {
       headers: { "Content-Type": "application/json" },
       body: JSON.stringify({ bankName, accountNumber }),
     });
-    if (!response.ok) throw new Error("Failed to validate account");
+    if (!response.ok) {
+      const error = await response.json();
+      throw new Error(error.error || "Failed to validate account");
+    }
+    return response.json();
+  },
+
+  async processTransaction(id: string, transactionHash: string): Promise<{ success: boolean; message: string }> {
+    const response = await fetch(`/api/transactions/${id}/process`, {
+      method: "POST",
+      headers: { "Content-Type": "application/json" },
+      body: JSON.stringify({ transactionHash }),
+    });
+    if (!response.ok) {
+      const error = await response.json();
+      throw new Error(error.error || "Failed to process transaction");
+    }
     return response.json();
   },
 
@@ -34,9 +50,14 @@ export const api = {
     amount: string;
     nairaAmount: string;
     exchangeRate: string;
+    platformFee: string;
+    platformFeeNaira: string;
+    netAmount: string;
+    netNairaAmount: string;
     bankName: string;
     accountNumber: string;
     accountName: string;
+    userWalletAddress?: string;
     status: string;
   }): Promise<Transaction> {
     const response = await fetch("/api/transactions", {

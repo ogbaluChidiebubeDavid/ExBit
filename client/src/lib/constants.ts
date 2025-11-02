@@ -11,27 +11,30 @@ export const TOKEN_INFO = {
     { symbol: 'ETH', name: 'Ethereum' },
     { symbol: 'USDT', name: 'Tether' },
     { symbol: 'USDC', name: 'USD Coin' },
-    { symbol: 'WBTC', name: 'Wrapped Bitcoin' },
+    { symbol: 'DAI', name: 'Dai' },
   ],
   bsc: [
     { symbol: 'BNB', name: 'BNB' },
     { symbol: 'USDT', name: 'Tether' },
     { symbol: 'USDC', name: 'USD Coin' },
+    { symbol: 'BUSD', name: 'Binance USD' },
   ],
   polygon: [
     { symbol: 'MATIC', name: 'Polygon' },
     { symbol: 'USDT', name: 'Tether' },
     { symbol: 'USDC', name: 'USD Coin' },
+    { symbol: 'DAI', name: 'Dai' },
   ],
   arbitrum: [
     { symbol: 'ETH', name: 'Ethereum' },
     { symbol: 'USDT', name: 'Tether' },
     { symbol: 'USDC', name: 'USD Coin' },
+    { symbol: 'DAI', name: 'Dai' },
   ],
   base: [
     { symbol: 'ETH', name: 'Ethereum' },
-    { symbol: 'USDT', name: 'Tether' },
     { symbol: 'USDC', name: 'USD Coin' },
+    { symbol: 'DAI', name: 'Dai' },
   ],
 } as const;
 

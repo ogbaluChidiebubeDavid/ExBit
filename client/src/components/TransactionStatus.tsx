@@ -8,7 +8,7 @@ interface TransactionStatusProps {
   transactionId: string;
   cryptoAmount: string;
   cryptoSymbol: string;
-  nairaAmount: number;
+  nairaAmount: string;
   onNewSwap: () => void;
 }
 
@@ -30,12 +30,12 @@ export function TransactionStatus({
     });
   };
 
-  const formatNaira = (amount: number) => {
+  const formatNaira = (amount: string) => {
     return new Intl.NumberFormat('en-NG', {
       style: 'currency',
       currency: 'NGN',
       minimumFractionDigits: 2,
-    }).format(amount);
+    }).format(parseFloat(amount));
   };
 
   const statusConfig = {

@@ -10,6 +10,7 @@ export interface IStorage {
   getTransaction(id: string): Promise<Transaction | undefined>;
   getAllTransactions(): Promise<Transaction[]>;
   updateTransactionStatus(id: string, status: string): Promise<Transaction | undefined>;
+  updateTransaction(id: string, updates: Partial<Transaction>): Promise<Transaction | undefined>;
 }
 
 export class MemStorage implements IStorage {
@@ -45,6 +46,11 @@ export class MemStorage implements IStorage {
       id,
       status: insertTransaction.status || "pending",
       accountName: insertTransaction.accountName || null,
+      userWalletAddress: insertTransaction.userWalletAddress || null,
+      transactionHash: insertTransaction.transactionHash || null,
+      paystackReference: insertTransaction.paystackReference || null,
+      platformFeeNaira: insertTransaction.platformFeeNaira || "0",
+      netNairaAmount: insertTransaction.netNairaAmount || "0",
       createdAt: new Date(),
     };
     this.transactions.set(id, transaction);
@@ -65,6 +71,16 @@ export class MemStorage implements IStorage {
     const transaction = this.transactions.get(id);
     if (transaction) {
       transaction.status = status;
+      this.transactions.set(id, transaction);
+      return transaction;
+    }
+    return undefined;
+  }
+
+  async updateTransaction(id: string, updates: Partial<Transaction>): Promise<Transaction | undefined> {
+    const transaction = this.transactions.get(id);
+    if (transaction) {
+      Object.assign(transaction, updates);
       this.transactions.set(id, transaction);
       return transaction;
     }
