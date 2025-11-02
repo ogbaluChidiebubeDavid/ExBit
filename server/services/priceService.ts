@@ -1,27 +1,27 @@
 import axios from "axios";
 
-interface BinancePrice {
-  symbol: string;
-  price: string;
+interface CoinGeckoPrice {
+  [key: string]: {
+    ngn: number;
+  };
 }
 
-const BINANCE_API_URL = "https://api.binance.com/api/v3";
+const COINGECKO_API_URL = "https://api.coingecko.com/api/v3";
 
-const BINANCE_SYMBOL_MAP: Record<string, string> = {
-  USDT: "USDTBUSD",
-  USDC: "USDCBUSD",
-  DAI: "DAIBUSD",
-  ETH: "ETHUSDT",
-  BNB: "BNBUSDT",
-  MATIC: "MATICUSDT",
-  BUSD: "BUSDUSDT",
+// Map our token symbols to CoinGecko IDs
+const COINGECKO_ID_MAP: Record<string, string> = {
+  USDT: "tether",
+  USDC: "usd-coin",
+  DAI: "dai",
+  ETH: "ethereum",
+  BNB: "binancecoin",
+  MATIC: "matic-network",
+  BUSD: "binance-usd",
 };
-
-const NAIRA_USD_RATE = 1650;
 
 export class PriceService {
   private priceCache: Map<string, { price: number; timestamp: number }> = new Map();
-  private readonly CACHE_DURATION = 30000;
+  private readonly CACHE_DURATION = 30000; // 30 seconds
 
   async getTokenPriceInNaira(symbol: string): Promise<number> {
     const cached = this.priceCache.get(symbol);
@@ -30,24 +30,26 @@ export class PriceService {
     }
 
     try {
-      const binanceSymbol = BINANCE_SYMBOL_MAP[symbol];
-      if (!binanceSymbol) {
+      const coinGeckoId = COINGECKO_ID_MAP[symbol];
+      if (!coinGeckoId) {
         throw new Error(`Unsupported token: ${symbol}`);
       }
 
-      const response = await axios.get<BinancePrice>(`${BINANCE_API_URL}/ticker/price`, {
-        params: { symbol: binanceSymbol },
-      });
+      const response = await axios.get<CoinGeckoPrice>(
+        `${COINGECKO_API_URL}/simple/price`,
+        {
+          params: {
+            ids: coinGeckoId,
+            vs_currencies: "ngn",
+          },
+          timeout: 5000,
+        }
+      );
 
-      let usdPrice: number;
-      
-      if (symbol === "USDT" || symbol === "USDC" || symbol === "DAI" || symbol === "BUSD") {
-        usdPrice = 1;
-      } else {
-        usdPrice = parseFloat(response.data.price);
+      const nairaPrice = response.data[coinGeckoId]?.ngn;
+      if (!nairaPrice) {
+        throw new Error(`No price data available for ${symbol}`);
       }
-
-      const nairaPrice = usdPrice * NAIRA_USD_RATE;
 
       this.priceCache.set(symbol, {
         price: nairaPrice,
@@ -58,6 +60,7 @@ export class PriceService {
     } catch (error) {
       console.error(`Failed to fetch price for ${symbol}:`, error);
       
+      // Fallback prices if API fails
       const fallbackPrices: Record<string, number> = {
         USDT: 1650,
         USDC: 1650,
@@ -73,20 +76,55 @@ export class PriceService {
   }
 
   async getAllPrices(): Promise<Record<string, number>> {
-    const tokens = Object.keys(BINANCE_SYMBOL_MAP);
-    const prices: Record<string, number> = {};
-
-    await Promise.all(
-      tokens.map(async (token) => {
-        try {
-          prices[token] = await this.getTokenPriceInNaira(token);
-        } catch (error) {
-          console.error(`Failed to get price for ${token}:`, error);
+    try {
+      // Fetch all prices in one API call for efficiency
+      const allCoinGeckoIds = Object.values(COINGECKO_ID_MAP).join(",");
+      
+      const response = await axios.get<CoinGeckoPrice>(
+        `${COINGECKO_API_URL}/simple/price`,
+        {
+          params: {
+            ids: allCoinGeckoIds,
+            vs_currencies: "ngn",
+          },
+          timeout: 5000,
         }
-      })
-    );
+      );
 
-    return prices;
+      const prices: Record<string, number> = {};
+
+      // Map CoinGecko IDs back to our token symbols
+      for (const [symbol, coinGeckoId] of Object.entries(COINGECKO_ID_MAP)) {
+        const nairaPrice = response.data[coinGeckoId]?.ngn;
+        if (nairaPrice) {
+          prices[symbol] = nairaPrice;
+          this.priceCache.set(symbol, {
+            price: nairaPrice,
+            timestamp: Date.now(),
+          });
+        }
+      }
+
+      return prices;
+    } catch (error) {
+      console.error("Failed to fetch all prices:", error);
+      
+      // Use cached prices if available, otherwise fallback
+      const prices: Record<string, number> = {};
+      const tokens = Object.keys(COINGECKO_ID_MAP);
+
+      for (const token of tokens) {
+        const cached = this.priceCache.get(token);
+        if (cached) {
+          prices[token] = cached.price;
+        } else {
+          // Use fallback prices
+          prices[token] = await this.getTokenPriceInNaira(token);
+        }
+      }
+
+      return prices;
+    }
   }
 }
 

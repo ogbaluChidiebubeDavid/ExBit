@@ -31,6 +31,8 @@ export default function SwapPage() {
   const [accountName, setAccountName] = useState("");
   const [transactionId, setTransactionId] = useState("");
   const [isProcessingBlockchain, setIsProcessingBlockchain] = useState(false);
+  const [tokenBalance, setTokenBalance] = useState<string>("0");
+  const [isCorrectChain, setIsCorrectChain] = useState(false);
 
   const { data: rates } = useQuery({
     queryKey: ["/api/rates"],
@@ -88,6 +90,39 @@ export default function SwapPage() {
     }
   }, [accountNumber, bankName]);
 
+  useEffect(() => {
+    const switchChainAndFetchBalance = async () => {
+      if (walletAddress && blockchain && selectedToken) {
+        try {
+          await web3Service.switchChain(blockchain);
+          setIsCorrectChain(true);
+          
+          const balance = await web3Service.getTokenBalance(
+            blockchain,
+            selectedToken,
+            walletAddress
+          );
+          setTokenBalance(balance);
+        } catch (error: any) {
+          console.error("Failed to switch chain or fetch balance:", error);
+          
+          if (error.code === 4001 || error.message?.includes("rejected")) {
+            toast({
+              title: "Network Switch Cancelled",
+              description: `Please switch to ${blockchain} network to continue`,
+              variant: "destructive",
+            });
+            setIsCorrectChain(false);
+          } else {
+            setIsCorrectChain(true);
+          }
+          setTokenBalance("0");
+        }
+      }
+    };
+    switchChainAndFetchBalance();
+  }, [walletAddress, blockchain, selectedToken]);
+
   const getCurrentRate = () => {
     if (!rates) return 0;
     return rates[blockchain]?.[selectedToken] || 0;
@@ -110,13 +145,33 @@ export default function SwapPage() {
   };
 
   const canProceedFromStep1 = blockchain && selectedToken;
-  const canProceedFromStep2 = amount && parseFloat(amount) > 0;
+  const canProceedFromStep2 = () => {
+    if (!walletAddress) return amount && parseFloat(amount) >= 0.01;
+    
+    const numAmount = parseFloat(amount);
+    const balance = parseFloat(tokenBalance);
+    return (
+      amount &&
+      numAmount >= 0.01 &&
+      isCorrectChain &&
+      numAmount <= balance
+    );
+  };
   const canProceedFromStep3 = bankName && accountNumber.length === 10 && accountName;
 
   const handleNextStep = () => {
     if (currentStep === 1 && canProceedFromStep1) {
       setCurrentStep(2);
-    } else if (currentStep === 2 && canProceedFromStep2) {
+    } else if (currentStep === 2 && canProceedFromStep2()) {
+      const numAmount = parseFloat(amount);
+      if (numAmount < 0.01) {
+        toast({
+          title: "Amount Too Small",
+          description: "Minimum swap amount is 0.01 tokens",
+          variant: "destructive",
+        });
+        return;
+      }
       setCurrentStep(3);
     } else if (currentStep === 3 && canProceedFromStep3) {
       setCurrentStep(4);
@@ -132,6 +187,32 @@ export default function SwapPage() {
       });
       return;
     }
+
+    const numAmount = parseFloat(amount);
+    const balance = parseFloat(tokenBalance);
+
+    if (numAmount > balance) {
+      toast({
+        title: "Insufficient Balance",
+        description: `You only have ${balance} ${selectedToken} in your wallet`,
+        variant: "destructive",
+      });
+      return;
+    }
+
+    if (numAmount < 0.01) {
+      toast({
+        title: "Amount Too Small",
+        description: "Minimum swap amount is 0.01 tokens",
+        variant: "destructive",
+      });
+      return;
+    }
+
+    toast({
+      title: "Sign Transaction",
+      description: "Please approve the transaction in your wallet",
+    });
 
     setIsProcessingBlockchain(true);
 
@@ -262,6 +343,7 @@ export default function SwapPage() {
                   amount={amount}
                   onTokenChange={setSelectedToken}
                   onAmountChange={setAmount}
+                  walletAddress={walletAddress || undefined}
                 />
                 {amount && parseFloat(amount) > 0 && (
                   <ConversionDisplay
@@ -282,7 +364,7 @@ export default function SwapPage() {
                   </Button>
                   <Button
                     onClick={handleNextStep}
-                    disabled={!canProceedFromStep2}
+                    disabled={!canProceedFromStep2()}
                     className="flex-1"
                     data-testid="button-next-step"
                   >
