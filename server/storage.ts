@@ -1,5 +1,6 @@
-import { type User, type InsertUser, type Transaction, type InsertTransaction } from "@shared/schema";
-import { randomUUID } from "crypto";
+import { users, transactions, type User, type InsertUser, type Transaction, type InsertTransaction } from "@shared/schema";
+import { db } from "./db";
+import { eq, desc } from "drizzle-orm";
 
 export interface IStorage {
   getUser(id: string): Promise<User | undefined>;
@@ -13,79 +14,65 @@ export interface IStorage {
   updateTransaction(id: string, updates: Partial<Transaction>): Promise<Transaction | undefined>;
 }
 
-export class MemStorage implements IStorage {
-  private users: Map<string, User>;
-  private transactions: Map<string, Transaction>;
-
-  constructor() {
-    this.users = new Map();
-    this.transactions = new Map();
-  }
-
+export class DatabaseStorage implements IStorage {
   async getUser(id: string): Promise<User | undefined> {
-    return this.users.get(id);
+    const [user] = await db.select().from(users).where(eq(users.id, id));
+    return user || undefined;
   }
 
   async getUserByUsername(username: string): Promise<User | undefined> {
-    return Array.from(this.users.values()).find(
-      (user) => user.username === username,
-    );
+    const [user] = await db.select().from(users).where(eq(users.username, username));
+    return user || undefined;
   }
 
   async createUser(insertUser: InsertUser): Promise<User> {
-    const id = randomUUID();
-    const user: User = { ...insertUser, id };
-    this.users.set(id, user);
+    const [user] = await db
+      .insert(users)
+      .values(insertUser)
+      .returning();
     return user;
   }
 
   async createTransaction(insertTransaction: InsertTransaction): Promise<Transaction> {
-    const id = randomUUID();
-    const transaction: Transaction = {
-      ...insertTransaction,
-      id,
-      status: insertTransaction.status || "pending",
-      accountName: insertTransaction.accountName || null,
-      userWalletAddress: insertTransaction.userWalletAddress || null,
-      transactionHash: insertTransaction.transactionHash || null,
-      paystackReference: insertTransaction.paystackReference || null,
-      platformFeeNaira: insertTransaction.platformFeeNaira || "0",
-      netNairaAmount: insertTransaction.netNairaAmount || "0",
-      createdAt: new Date(),
-    };
-    this.transactions.set(id, transaction);
+    const [transaction] = await db
+      .insert(transactions)
+      .values(insertTransaction)
+      .returning();
     return transaction;
   }
 
   async getTransaction(id: string): Promise<Transaction | undefined> {
-    return this.transactions.get(id);
+    const [transaction] = await db
+      .select()
+      .from(transactions)
+      .where(eq(transactions.id, id));
+    return transaction || undefined;
   }
 
   async getAllTransactions(): Promise<Transaction[]> {
-    return Array.from(this.transactions.values()).sort(
-      (a, b) => b.createdAt.getTime() - a.createdAt.getTime()
-    );
+    return await db
+      .select()
+      .from(transactions)
+      .orderBy(desc(transactions.createdAt));
   }
 
   async updateTransactionStatus(id: string, status: string): Promise<Transaction | undefined> {
-    const transaction = this.transactions.get(id);
-    if (transaction) {
-      transaction.status = status;
-      this.transactions.set(id, transaction);
-      return transaction;
-    }
-    return undefined;
+    const [transaction] = await db
+      .update(transactions)
+      .set({ status })
+      .where(eq(transactions.id, id))
+      .returning();
+    return transaction || undefined;
   }
 
   async updateTransaction(id: string, updates: Partial<Transaction>): Promise<Transaction | undefined> {
-    const transaction = this.transactions.get(id);
-    if (transaction) {
-      Object.assign(transaction, updates);
-      this.transactions.set(id, transaction);
-      return transaction;
-    }
-    return undefined;
+    const [transaction] = await db
+      .update(transactions)
+      .set(updates)
+      .where(eq(transactions.id, id))
+      .returning();
+    return transaction || undefined;
   }
 }
 
-export const storage = new MemStorage();
+export const storage = new DatabaseStorage();
