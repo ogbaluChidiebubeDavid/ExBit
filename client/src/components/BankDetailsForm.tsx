@@ -60,9 +60,15 @@ export function BankDetailsForm({
           className="font-mono text-lg"
           data-testid="input-account-number"
         />
-        <p className="text-xs text-muted-foreground mt-1">
-          Enter your 10-digit account number
-        </p>
+        {bankName === "Test Bank (Paystack)" ? (
+          <p className="text-xs text-primary mt-1 font-medium">
+            For testing: Use account number <span className="font-mono">0123456789</span>
+          </p>
+        ) : (
+          <p className="text-xs text-muted-foreground mt-1">
+            Enter your 10-digit account number
+          </p>
+        )}
       </div>
 
       {accountName && (

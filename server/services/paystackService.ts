@@ -46,6 +46,7 @@ const BANK_CODES: Record<string, string> = {
   "Kuda Bank": "50211",
   "Opay": "999992",
   "PalmPay": "999991",
+  "Test Bank (Paystack)": "001",
 };
 
 export class PaystackService {
@@ -134,6 +135,10 @@ export class PaystackService {
       
       if (error.response?.status === 401) {
         throw new Error("Payment service authentication failed. Please contact support.");
+      }
+      
+      if (error.response?.status === 429) {
+        throw new Error("Daily test limit reached. Use 'Test Bank (Paystack)' with account number 0123456789 for unlimited testing, or switch to live mode.");
       }
 
       throw new Error(error.message || "Unable to verify account details at this time. Please try again.");
