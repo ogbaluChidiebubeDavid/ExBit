@@ -51,6 +51,28 @@ export async function registerRoutes(app: Express): Promise<Server> {
     }
   });
 
+  // Diagnostic endpoint to check Paystack key status
+  app.get("/api/paystack-status", async (req, res) => {
+    const apiKey = process.env.PAYSTACK_SECRET_KEY;
+    
+    if (!apiKey) {
+      return res.json({
+        status: "missing",
+        message: "PAYSTACK_SECRET_KEY is not set",
+      });
+    }
+
+    const keyType = apiKey.startsWith("sk_live_") ? "live" : apiKey.startsWith("sk_test_") ? "test" : "unknown";
+    const maskedKey = apiKey.slice(0, 12) + "..." + apiKey.slice(-4);
+    
+    res.json({
+      status: "configured",
+      keyType,
+      maskedKey,
+      message: `Paystack API key is set (${keyType} mode)`,
+    });
+  });
+
   // Validate bank account using Paystack API
   app.post("/api/validate-account", async (req, res) => {
     const schema = z.object({
@@ -62,6 +84,7 @@ export async function registerRoutes(app: Express): Promise<Server> {
       const { bankName, accountNumber } = schema.parse(req.body);
       
       console.log(`[Validation] Attempting to validate account: ${accountNumber} at ${bankName}`);
+      console.log(`[Validation] API Key type: ${process.env.PAYSTACK_SECRET_KEY?.startsWith("sk_live_") ? "LIVE" : "TEST"}`);
 
       const result = await paystackService.validateBankAccount(accountNumber, bankName);
       
