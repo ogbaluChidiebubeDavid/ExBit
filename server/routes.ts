@@ -148,12 +148,16 @@ export async function registerRoutes(app: Express): Promise<Server> {
 
       setTimeout(async () => {
         try {
+          console.log(`[Transfer] Starting transfer process for transaction ${req.params.id}`);
+          
           if (!transaction.accountName || !transaction.accountNumber || !transaction.bankName) {
+            console.error(`[Transfer] Missing account details - accountName: ${!!transaction.accountName}, accountNumber: ${!!transaction.accountNumber}, bankName: ${!!transaction.bankName}`);
             await storage.updateTransactionStatus(req.params.id, "failed");
             return;
           }
 
           const netNairaAmount = parseFloat(transaction.netNairaAmount);
+          console.log(`[Transfer] Attempting to transfer ₦${netNairaAmount} to ${transaction.bankName}`);
 
           const transferResult = await flutterwaveService.initiateTransfer(
             transaction.accountNumber,
@@ -163,12 +167,20 @@ export async function registerRoutes(app: Express): Promise<Server> {
             `exbit-${transaction.id}`
           );
 
+          console.log(`[Transfer] Transfer successful, reference: ${transferResult.reference}`);
+
           await storage.updateTransaction(req.params.id, {
             flutterwaveReference: transferResult.reference,
             status: "completed",
           });
+          
+          console.log(`[Transfer] Transaction ${req.params.id} marked as completed`);
         } catch (error: any) {
-          console.error("Failed to process Naira transfer:", error);
+          console.error(`[Transfer] Failed to process Naira transfer for ${req.params.id}:`, {
+            message: error.message,
+            stack: error.stack,
+            response: error.response?.data
+          });
           await storage.updateTransactionStatus(req.params.id, "failed");
         }
       }, 2000);
