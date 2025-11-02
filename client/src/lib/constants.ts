@@ -39,7 +39,6 @@ export const TOKEN_INFO = {
 } as const;
 
 export const NIGERIAN_BANKS = [
-  'Test Bank (Paystack)',
   'Access Bank',
   'Guaranty Trust Bank',
   'United Bank for Africa',
