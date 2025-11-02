@@ -120,13 +120,24 @@ export async function registerRoutes(app: Express): Promise<Server> {
 
   // Process blockchain transaction and initiate Naira transfer
   app.post("/api/transactions/:id/process", async (req, res) => {
+    console.log(`[Process] Received process request for transaction ${req.params.id}`);
+    
     const schema = z.object({
       transactionHash: z.string(),
     });
 
     try {
       const { transactionHash } = schema.parse(req.body);
+      console.log(`[Process] Transaction hash: ${transactionHash}`);
+      
       const transaction = await storage.getTransaction(req.params.id);
+      console.log(`[Process] Transaction found:`, {
+        id: transaction?.id,
+        status: transaction?.status,
+        hasAccountName: !!transaction?.accountName,
+        hasAccountNumber: !!transaction?.accountNumber,
+        hasBankName: !!transaction?.bankName
+      });
 
       if (!transaction) {
         return res.status(404).json({ error: "Transaction not found" });
