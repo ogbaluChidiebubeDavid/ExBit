@@ -7,7 +7,7 @@ import {
   SelectTrigger,
   SelectValue,
 } from "@/components/ui/select";
-import { TOKENS } from "@/lib/constants";
+import { TOKEN_INFO } from "@/lib/constants";
 
 interface TokenAmountInputProps {
   blockchain: string;
@@ -24,7 +24,7 @@ export function TokenAmountInput({
   onTokenChange,
   onAmountChange,
 }: TokenAmountInputProps) {
-  const tokens = TOKENS[blockchain as keyof typeof TOKENS] || [];
+  const tokens = TOKEN_INFO[blockchain as keyof typeof TOKEN_INFO] || [];
 
   return (
     <div className="space-y-4">

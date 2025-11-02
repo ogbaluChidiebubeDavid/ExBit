@@ -6,32 +6,32 @@ export const BLOCKCHAINS = [
   { id: 'base', name: 'Base', icon: '▲' },
 ] as const;
 
-export const TOKENS = {
+export const TOKEN_INFO = {
   ethereum: [
-    { symbol: 'ETH', name: 'Ethereum', rate: 1600000 },
-    { symbol: 'USDT', name: 'Tether', rate: 1650 },
-    { symbol: 'USDC', name: 'USD Coin', rate: 1650 },
-    { symbol: 'WBTC', name: 'Wrapped Bitcoin', rate: 95000000 },
+    { symbol: 'ETH', name: 'Ethereum' },
+    { symbol: 'USDT', name: 'Tether' },
+    { symbol: 'USDC', name: 'USD Coin' },
+    { symbol: 'WBTC', name: 'Wrapped Bitcoin' },
   ],
   bsc: [
-    { symbol: 'BNB', name: 'BNB', rate: 950000 },
-    { symbol: 'USDT', name: 'Tether', rate: 1650 },
-    { symbol: 'USDC', name: 'USD Coin', rate: 1650 },
+    { symbol: 'BNB', name: 'BNB' },
+    { symbol: 'USDT', name: 'Tether' },
+    { symbol: 'USDC', name: 'USD Coin' },
   ],
   polygon: [
-    { symbol: 'MATIC', name: 'Polygon', rate: 1400 },
-    { symbol: 'USDT', name: 'Tether', rate: 1650 },
-    { symbol: 'USDC', name: 'USD Coin', rate: 1650 },
+    { symbol: 'MATIC', name: 'Polygon' },
+    { symbol: 'USDT', name: 'Tether' },
+    { symbol: 'USDC', name: 'USD Coin' },
   ],
   arbitrum: [
-    { symbol: 'ETH', name: 'Ethereum', rate: 1600000 },
-    { symbol: 'USDT', name: 'Tether', rate: 1650 },
-    { symbol: 'USDC', name: 'USD Coin', rate: 1650 },
+    { symbol: 'ETH', name: 'Ethereum' },
+    { symbol: 'USDT', name: 'Tether' },
+    { symbol: 'USDC', name: 'USD Coin' },
   ],
   base: [
-    { symbol: 'ETH', name: 'Ethereum', rate: 1600000 },
-    { symbol: 'USDT', name: 'Tether', rate: 1650 },
-    { symbol: 'USDC', name: 'USD Coin', rate: 1650 },
+    { symbol: 'ETH', name: 'Ethereum' },
+    { symbol: 'USDT', name: 'Tether' },
+    { symbol: 'USDC', name: 'USD Coin' },
   ],
 } as const;
 

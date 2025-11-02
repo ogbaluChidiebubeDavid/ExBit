@@ -1,4 +1,6 @@
 import { useState, useEffect } from "react";
+import { useQuery, useMutation } from "@tanstack/react-query";
+import { queryClient } from "@/lib/queryClient";
 import { Header } from "@/components/Header";
 import { StepIndicator } from "@/components/StepIndicator";
 import { BlockchainSelector } from "@/components/BlockchainSelector";
@@ -9,11 +11,14 @@ import { SwapSummary } from "@/components/SwapSummary";
 import { TransactionStatus } from "@/components/TransactionStatus";
 import { Card } from "@/components/ui/card";
 import { Button } from "@/components/ui/button";
-import { TOKENS } from "@/lib/constants";
+import { TOKEN_INFO } from "@/lib/constants";
+import { api } from "@/lib/api";
+import { useToast } from "@/hooks/use-toast";
 
 type SwapStep = 1 | 2 | 3 | 4 | 5;
 
 export default function SwapPage() {
+  const { toast } = useToast();
   const [currentStep, setCurrentStep] = useState<SwapStep>(1);
   const [blockchain, setBlockchain] = useState("ethereum");
   const [selectedToken, setSelectedToken] = useState("USDT");
@@ -21,25 +26,67 @@ export default function SwapPage() {
   const [bankName, setBankName] = useState("");
   const [accountNumber, setAccountNumber] = useState("");
   const [accountName, setAccountName] = useState("");
-  const [isProcessing, setIsProcessing] = useState(false);
   const [transactionId, setTransactionId] = useState("");
 
-  // Mock account name verification
+  const { data: rates } = useQuery({
+    queryKey: ["/api/rates"],
+    queryFn: () => api.getExchangeRates(),
+  });
+
+  const accountValidation = useMutation({
+    mutationFn: ({ bankName, accountNumber }: { bankName: string; accountNumber: string }) =>
+      api.validateAccount(bankName, accountNumber),
+    onSuccess: (data) => {
+      setAccountName(data.accountName);
+    },
+    onError: () => {
+      toast({
+        title: "Validation Failed",
+        description: "Could not verify account details",
+        variant: "destructive",
+      });
+    },
+  });
+
+  const createTransaction = useMutation({
+    mutationFn: api.createTransaction,
+    onSuccess: (data) => {
+      setTransactionId(data.id);
+      setCurrentStep(5);
+      queryClient.invalidateQueries({ queryKey: ["/api/transactions"] });
+    },
+    onError: () => {
+      toast({
+        title: "Transaction Failed",
+        description: "Could not create transaction. Please try again.",
+        variant: "destructive",
+      });
+    },
+  });
+
+  const { data: currentTransaction } = useQuery({
+    queryKey: ["/api/transactions", transactionId],
+    queryFn: () => api.getTransaction(transactionId),
+    enabled: !!transactionId && currentStep === 5,
+    refetchInterval: (query) => {
+      const status = query.state.data?.status;
+      if (status === "completed" || status === "failed") {
+        return false;
+      }
+      return 2000;
+    },
+  });
+
   useEffect(() => {
+    setAccountName("");
     if (accountNumber.length === 10 && bankName) {
-      // todo: remove mock functionality
-      setTimeout(() => {
-        setAccountName("CHUKWUDI OKONKWO");
-      }, 500);
-    } else {
-      setAccountName("");
+      accountValidation.mutate({ bankName, accountNumber });
     }
   }, [accountNumber, bankName]);
 
   const getCurrentRate = () => {
-    const tokens = TOKENS[blockchain as keyof typeof TOKENS] || [];
-    const token = tokens.find((t) => t.symbol === selectedToken);
-    return token?.rate || 0;
+    if (!rates) return 0;
+    return rates[blockchain]?.[selectedToken] || 0;
   };
 
   const calculateNaira = () => {
@@ -50,7 +97,7 @@ export default function SwapPage() {
 
   const calculateFee = () => {
     const nairaAmount = calculateNaira();
-    return nairaAmount * 0.005; // 0.5% fee
+    return nairaAmount * 0.005;
   };
 
   const canProceedFromStep1 = blockchain && selectedToken;
@@ -68,13 +115,21 @@ export default function SwapPage() {
   };
 
   const handleConfirmSwap = () => {
-    setIsProcessing(true);
-    // todo: remove mock functionality
-    setTimeout(() => {
-      setTransactionId(`0x${Math.random().toString(16).slice(2, 42)}`);
-      setIsProcessing(false);
-      setCurrentStep(5);
-    }, 2000);
+    const nairaAmount = calculateNaira();
+    const fee = calculateFee();
+    const netAmount = nairaAmount - fee;
+
+    createTransaction.mutate({
+      blockchain,
+      token: selectedToken,
+      amount,
+      nairaAmount: netAmount.toFixed(2),
+      exchangeRate: getCurrentRate().toFixed(2),
+      bankName,
+      accountNumber,
+      accountName,
+      status: "pending",
+    });
   };
 
   const handleNewSwap = () => {
@@ -113,7 +168,7 @@ export default function SwapPage() {
                   selected={blockchain}
                   onSelect={(chain) => {
                     setBlockchain(chain);
-                    const tokens = TOKENS[chain as keyof typeof TOKENS] || [];
+                    const tokens = TOKEN_INFO[chain as keyof typeof TOKEN_INFO] || [];
                     setSelectedToken(tokens[0]?.symbol || "");
                   }}
                 />
@@ -220,19 +275,28 @@ export default function SwapPage() {
                 accountName={accountName}
                 onConfirm={handleConfirmSwap}
                 onBack={() => setCurrentStep(3)}
-                isProcessing={isProcessing}
+                isProcessing={createTransaction.isPending}
               />
             )}
 
             {currentStep === 5 && (
-              <TransactionStatus
-                status="completed"
-                transactionId={transactionId}
-                cryptoAmount={amount}
-                cryptoSymbol={selectedToken}
-                nairaAmount={calculateNaira() - calculateFee()}
-                onNewSwap={handleNewSwap}
-              />
+              <>
+                {!currentTransaction ? (
+                  <div className="py-12 text-center">
+                    <div className="animate-spin rounded-full h-12 w-12 border-b-2 border-primary mx-auto mb-4"></div>
+                    <p className="text-muted-foreground">Loading transaction details...</p>
+                  </div>
+                ) : (
+                  <TransactionStatus
+                    status={currentTransaction.status as "pending" | "processing" | "completed" | "failed"}
+                    transactionId={transactionId}
+                    cryptoAmount={amount}
+                    cryptoSymbol={selectedToken}
+                    nairaAmount={calculateNaira() - calculateFee()}
+                    onNewSwap={handleNewSwap}
+                  />
+                )}
+              </>
             )}
           </Card>
 
