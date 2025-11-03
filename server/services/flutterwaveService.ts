@@ -18,9 +18,9 @@ const BANK_CODES: Record<string, string> = {
   "Heritage Bank": "030",
   "Jaiz Bank": "301",
   "Providus Bank": "101",
-  "Kuda Bank": "50211",
-  "Opay": "999992",
-  "PalmPay": "999991",
+  "Kuda Bank": "090267",
+  "Opay": "100004",
+  "PalmPay": "100033",
 };
 
 export class FlutterwaveService {
