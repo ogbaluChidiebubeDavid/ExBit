@@ -1,0 +1,31 @@
+FLUTTERWAVE IP WHITELIST
+========================
+
+Add these IPs to your Flutterwave dashboard:
+Settings → API Settings → IP Whitelist
+
+Production Deployment IPs (Autoscale):
+--------------------------------------
+34.34.253.78
+104.198.6.56
+34.96.52.71
+34.34.253.74
+34.34.253.68
+
+Previous IPs (keep for backup):
+-------------------------------
+34.187.157.128
+136.118.15.95
+34.117.33.233
+
+INSTRUCTIONS:
+-------------
+1. Log into https://dashboard.flutterwave.com
+2. Go to Settings → API Settings
+3. Find "IP Whitelist" section
+4. Add all 8 IPs listed above
+5. Click Save
+
+NOTE: Autoscale deployments use multiple servers with different IPs.
+As your app scales, more IPs may appear. Monitor restricted transfers
+and add new IPs as needed.
