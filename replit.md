@@ -133,6 +133,10 @@ Transaction {
 - **Documentation**: https://developer.flutterwave.com/
 - **Advantages**: Works with unregistered businesses, no business registration required
 - **Test Mode**: Available for development/testing
+- **Critical Requirements**:
+  - **Minimum Transfer Amount**: ₦100 (Flutterwave enforced)
+  - **IP Whitelisting**: Must whitelist Replit's IP (136.118.15.95) in Flutterwave dashboard
+  - **Funded Balance**: Flutterwave account must have sufficient balance to process transfers
 
 ### Web3 Wallet Integration
 - **Supported Wallets**: MetaMask, WalletConnect, Coinbase Wallet, etc.
@@ -212,7 +216,7 @@ All components follow Shadcn UI patterns with custom styling:
   - ✅ **Implemented automatic network switching before balance checks**
   - ✅ **Added transaction signing prompt** ("Please approve the transaction in your wallet")
   - ✅ **Removed number input spinner buttons** (cleaner UI)
-  - ✅ **Lowered minimum swap to 0.01 tokens** (1 cent minimum)
+  - ✅ **Set minimum swap to 0.07 tokens** (~₦100 minimum for Flutterwave transfers)
   - ✅ Added transaction processing flow with MetaMask approval
   - ✅ Migrated from in-memory to PostgreSQL database
   - ✅ Transaction history now persists across restarts
@@ -294,7 +298,8 @@ The app is ready for testing with:
 - **Flutterwave**: Live mode configured, works with unregistered businesses
 - **Wallet Address**: Platform fees sent to 0xbe3496154fec589f393717f730ae4b9ddda8564f
 - **Balance Checking**: Automatic network switching ensures accurate balances
-- **Minimum Swap**: 0.01 tokens (1 cent) - perfect for testing and small swaps
+- **Minimum Swap**: 0.07 tokens (~₦100) - Flutterwave minimum transfer requirement
+- **IP Whitelisting**: Replit IP (136.118.15.95) whitelisted in Flutterwave dashboard
 - **Testing**: All components have data-testid attributes for e2e testing
 - **Responsive**: Works on mobile, tablet, and desktop
 - **Requirements**: MetaMask or compatible Web3 wallet required for users
