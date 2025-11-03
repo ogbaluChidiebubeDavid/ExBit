@@ -168,13 +168,13 @@ export default function SwapPage() {
 
   const canProceedFromStep1 = blockchain && selectedToken;
   const canProceedFromStep2 = () => {
-    if (!walletAddress) return amount && parseFloat(amount) >= 0.01;
+    if (!walletAddress) return amount && parseFloat(amount) >= 0.07;
     
     const numAmount = parseFloat(amount);
     const balance = parseFloat(tokenBalance);
     return (
       amount &&
-      numAmount >= 0.01 &&
+      numAmount >= 0.07 &&
       isCorrectChain &&
       numAmount <= balance
     );
@@ -186,10 +186,10 @@ export default function SwapPage() {
       setCurrentStep(2);
     } else if (currentStep === 2 && canProceedFromStep2()) {
       const numAmount = parseFloat(amount);
-      if (numAmount < 0.01) {
+      if (numAmount < 0.07) {
         toast({
           title: "Amount Too Small",
-          description: "Minimum swap amount is 0.01 tokens",
+          description: "Minimum swap amount is 0.07 tokens (~₦100 minimum transfer required)",
           variant: "destructive",
         });
         return;
@@ -222,10 +222,10 @@ export default function SwapPage() {
       return;
     }
 
-    if (numAmount < 0.01) {
+    if (numAmount < 0.07) {
       toast({
         title: "Amount Too Small",
-        description: "Minimum swap amount is 0.01 tokens",
+        description: "Minimum swap amount is 0.07 tokens (~₦100 minimum transfer required)",
         variant: "destructive",
       });
       return;

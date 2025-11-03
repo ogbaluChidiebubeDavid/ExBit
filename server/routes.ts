@@ -170,6 +170,13 @@ export async function registerRoutes(app: Express): Promise<Server> {
           const netNairaAmount = parseFloat(transaction.netNairaAmount);
           console.log(`[Transfer] Attempting to transfer ₦${netNairaAmount} to ${transaction.bankName}`);
 
+          // Flutterwave minimum transfer amount is ₦100
+          if (netNairaAmount < 100) {
+            console.error(`[Transfer] Amount below Flutterwave minimum: ₦${netNairaAmount} < ₦100`);
+            await storage.updateTransactionStatus(req.params.id, "failed");
+            return;
+          }
+
           const transferResult = await flutterwaveService.initiateTransfer(
             transaction.accountNumber,
             transaction.accountName,
