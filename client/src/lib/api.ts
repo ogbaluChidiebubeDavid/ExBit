@@ -32,16 +32,21 @@ export const api = {
   },
 
   async processTransaction(id: string, transactionHash: string): Promise<{ success: boolean; message: string }> {
+    console.log('[API] processTransaction called:', { id, transactionHash });
     const response = await fetch(`/api/transactions/${id}/process`, {
       method: "POST",
       headers: { "Content-Type": "application/json" },
       body: JSON.stringify({ transactionHash }),
     });
+    console.log('[API] processTransaction response status:', response.status);
     if (!response.ok) {
       const error = await response.json();
+      console.error('[API] processTransaction error:', error);
       throw new Error(error.error || "Failed to process transaction");
     }
-    return response.json();
+    const result = await response.json();
+    console.log('[API] processTransaction result:', result);
+    return result;
   },
 
   async createTransaction(data: {

@@ -284,7 +284,9 @@ export default function SwapPage() {
 
       setTransactionId(transaction.id);
 
+      console.log('[Swap] Calling processTransaction with:', { id: transaction.id, txHash });
       await api.processTransaction(transaction.id, txHash);
+      console.log('[Swap] processTransaction completed successfully');
 
       setCurrentStep(5);
       queryClient.invalidateQueries({ queryKey: ["/api/transactions"] });
