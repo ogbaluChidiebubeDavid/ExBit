@@ -179,53 +179,60 @@ export async function registerRoutes(app: Express): Promise<Server> {
         console.warn("OWNER_WALLET_ADDRESS not set - platform fees will not be collected");
       }
 
-      setTimeout(async () => {
-        try {
-          console.log(`[Transfer] Starting transfer process for transaction ${req.params.id}`);
-          
-          if (!transaction.accountName || !transaction.accountNumber || !transaction.bankName) {
-            console.error(`[Transfer] Missing account details - accountName: ${!!transaction.accountName}, accountNumber: ${!!transaction.accountNumber}, bankName: ${!!transaction.bankName}`);
-            await storage.updateTransactionStatus(req.params.id, "failed");
-            return;
-          }
-
-          const netNairaAmount = parseFloat(transaction.netNairaAmount);
-          console.log(`[Transfer] Attempting to transfer ₦${netNairaAmount} to ${transaction.bankName}`);
-
-          // Flutterwave minimum transfer amount is ₦100
-          if (netNairaAmount < 100) {
-            console.error(`[Transfer] Amount below Flutterwave minimum: ₦${netNairaAmount} < ₦100`);
-            await storage.updateTransactionStatus(req.params.id, "failed");
-            return;
-          }
-
-          const transferResult = await flutterwaveService.initiateTransfer(
-            transaction.accountNumber,
-            transaction.accountName,
-            transaction.bankName,
-            netNairaAmount,
-            `exbit-${transaction.id}`
-          );
-
-          console.log(`[Transfer] Transfer successful, reference: ${transferResult.reference}`);
-
-          await storage.updateTransaction(req.params.id, {
-            flutterwaveReference: transferResult.reference,
-            status: "completed",
-          });
-          
-          console.log(`[Transfer] Transaction ${req.params.id} marked as completed`);
-        } catch (error: any) {
-          console.error(`[Transfer] Failed to process Naira transfer for ${req.params.id}:`, {
-            message: error.message,
-            stack: error.stack,
-            response: error.response?.data
-          });
+      // Process transfer immediately (no setTimeout to avoid losing callbacks on restart)
+      try {
+        console.log(`[Transfer] Starting transfer process for transaction ${req.params.id}`);
+        
+        if (!transaction.accountName || !transaction.accountNumber || !transaction.bankName) {
+          console.error(`[Transfer] Missing account details - accountName: ${!!transaction.accountName}, accountNumber: ${!!transaction.accountNumber}, bankName: ${!!transaction.bankName}`);
           await storage.updateTransactionStatus(req.params.id, "failed");
+          return res.status(400).json({ error: "Missing bank account details" });
         }
-      }, 2000);
 
-      res.json({ success: true, message: "Transaction processing started" });
+        const netNairaAmount = parseFloat(transaction.netNairaAmount);
+        console.log(`[Transfer] Attempting to transfer ₦${netNairaAmount} to ${transaction.bankName}`);
+
+        // Flutterwave minimum transfer amount is ₦100
+        if (netNairaAmount < 100) {
+          console.error(`[Transfer] Amount below Flutterwave minimum: ₦${netNairaAmount} < ₦100`);
+          await storage.updateTransactionStatus(req.params.id, "failed");
+          return res.status(400).json({ error: `Transfer amount (₦${netNairaAmount}) is below the minimum ₦100 required by Flutterwave` });
+        }
+
+        const transferResult = await flutterwaveService.initiateTransfer(
+          transaction.accountNumber,
+          transaction.accountName,
+          transaction.bankName,
+          netNairaAmount,
+          `exbit-${transaction.id}`
+        );
+
+        console.log(`[Transfer] Transfer successful, reference: ${transferResult.reference}`);
+
+        await storage.updateTransaction(req.params.id, {
+          flutterwaveReference: transferResult.reference,
+          status: "completed",
+        });
+        
+        console.log(`[Transfer] Transaction ${req.params.id} marked as completed`);
+        
+        res.json({ 
+          success: true, 
+          message: "Transfer completed successfully",
+          reference: transferResult.reference
+        });
+      } catch (error: any) {
+        console.error(`[Transfer] Failed to process Naira transfer for ${req.params.id}:`, {
+          message: error.message,
+          stack: error.stack,
+          response: error.response?.data
+        });
+        await storage.updateTransactionStatus(req.params.id, "failed");
+        return res.status(500).json({ 
+          error: error.message || "Failed to process transfer",
+          details: "Transfer to bank account failed. Please contact support with your transaction ID."
+        });
+      }
     } catch (error: any) {
       console.error("Transaction processing error:", error);
       if (error instanceof z.ZodError) {

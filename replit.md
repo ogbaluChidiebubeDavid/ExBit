@@ -195,6 +195,18 @@ All components follow Shadcn UI patterns with custom styling:
 - Wallet connection button with address display
 
 ## Recent Changes
+- Nov 3, 2025: **CRITICAL BUG FIX - Transfer Processing**
+  - ✅ **Fixed setTimeout bug causing failed transfers**
+    - Removed `setTimeout` from transfer processing (was causing callbacks to be lost on server restart)
+    - Transfers now process immediately in the same request
+    - Prevents transaction failures when server auto-restarts after code changes
+  - ✅ **Corrected digital bank codes from Flutterwave API**
+    - Opay: `100004` (was `999992` ❌)
+    - PalmPay: `100033` (was `999991` ❌)
+    - Kuda: `090267` (was `50211` ❌)
+  - ✅ **Added wallet balance diagnostic endpoint** (`/api/wallet-balance`)
+  - ✅ **Enhanced error logging** for Flutterwave transfer failures
+
 - Nov 2, 2025: **Switched to Flutterwave + Rebranded to ExBit**
   - ✅ **Replaced Paystack with Flutterwave API** (works with unregistered businesses!)
   - ✅ **Rebranded from NairaSwap to ExBit**
