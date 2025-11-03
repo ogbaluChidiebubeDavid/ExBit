@@ -145,9 +145,10 @@ export class FlutterwaveService {
         { headers: this.getHeaders() }
       );
 
-      console.log(`[Flutterwave] Transfer initiated successfully`);
+      console.log(`[Flutterwave] Transfer response:`, JSON.stringify(response.data, null, 2));
 
       if (response.data.status === "success" && response.data.data) {
+        console.log(`[Flutterwave] Transfer initiated successfully - ID: ${response.data.data.id}, Reference: ${response.data.data.reference}`);
         return {
           transferId: response.data.data.id.toString(),
           reference: response.data.data.reference,
@@ -156,12 +157,20 @@ export class FlutterwaveService {
 
       throw new Error("Failed to initiate transfer");
     } catch (error: any) {
-      console.error("[Flutterwave] Transfer error:", {
+      console.error("[Flutterwave] Transfer error - Full details:", {
         message: error.message,
-        response: error.response?.data,
-        status: error.response?.status,
+        responseData: error.response?.data,
+        responseStatus: error.response?.status,
+        requestData: {
+          amount,
+          bankName,
+          bankCode: BANK_CODES[bankName],
+          accountNumber: accountNumber.substring(0, 4) + "******",
+        }
       });
-      throw new Error(error.response?.data?.message || "Failed to initiate transfer");
+      
+      const errorMsg = error.response?.data?.message || error.message || "Failed to initiate transfer";
+      throw new Error(errorMsg);
     }
   }
 
@@ -181,6 +190,37 @@ export class FlutterwaveService {
     } catch (error) {
       console.error("[Flutterwave] Verify transfer error:", error);
       return false;
+    }
+  }
+
+  async getWalletBalance(): Promise<{ balance: number; currency: string } | null> {
+    if (!this.apiKey) {
+      return null;
+    }
+
+    try {
+      const response = await axios.get(
+        `${this.baseUrl}/balances/NGN`,
+        { headers: this.getHeaders() }
+      );
+
+      console.log("[Flutterwave] Balance response:", response.data);
+
+      if (response.data.status === "success" && response.data.data) {
+        return {
+          balance: parseFloat(response.data.data.available_balance || response.data.data.balance || "0"),
+          currency: response.data.data.currency || "NGN",
+        };
+      }
+
+      return null;
+    } catch (error: any) {
+      console.error("[Flutterwave] Balance check error:", {
+        message: error.message,
+        response: error.response?.data,
+        status: error.response?.status,
+      });
+      return null;
     }
   }
 }

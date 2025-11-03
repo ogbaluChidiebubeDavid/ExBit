@@ -73,6 +73,28 @@ export async function registerRoutes(app: Express): Promise<Server> {
     });
   });
 
+  // Check Flutterwave wallet balance
+  app.get("/api/wallet-balance", async (req, res) => {
+    try {
+      const balance = await flutterwaveService.getWalletBalance();
+      
+      if (!balance) {
+        return res.status(500).json({ 
+          error: "Unable to fetch wallet balance",
+          message: "Please check your Flutterwave API key configuration"
+        });
+      }
+
+      res.json(balance);
+    } catch (error: any) {
+      console.error("[Balance] Error fetching wallet balance:", error);
+      res.status(500).json({ 
+        error: "Failed to fetch wallet balance",
+        message: error.message 
+      });
+    }
+  });
+
   // Validate bank account using Flutterwave API
   app.post("/api/validate-account", async (req, res) => {
     const schema = z.object({
