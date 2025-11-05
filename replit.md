@@ -45,7 +45,7 @@ I prefer simple language and direct instructions. I want iterative development w
     - **Integration**: `GET /api/rates` endpoint.
 - **Flutterwave API**:
     - **Purpose**: Nigerian bank account validation (Account Resolution API) and automatic Naira transfers (Transfers API).
-    - **Requirements**: `FLUTTERWAVE_SECRET_KEY`, Flutterwave account with sufficient balance, and whitelisting of Reserved VM IP (`34.187.148.164`).
+    - **Requirements**: `FLUTTERWAVE_SECRET_KEY`, Flutterwave account with sufficient balance, and whitelisting of actual outbound IP (`136.117.70.64`).
     - **Minimum Transfer**: ₦100.
 - **Web3 Wallets**:
     - **Integration**: MetaMask, WalletConnect, Coinbase Wallet, etc., for user authentication, transaction signing, and blockchain interactions.

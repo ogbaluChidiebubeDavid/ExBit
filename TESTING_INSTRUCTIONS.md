@@ -1,9 +1,9 @@
 # ✅ ExBit - Ready to Test!
 
-## STATUS: All Systems Operational
+## ⚠️ STATUS: IP CONFIGURATION REQUIRED
 
-Your Reserved VM is running with IP: **34.187.148.164**  
-Flutterwave transfer test: ✅ **SUCCESS** - IP is whitelisted correctly!
+Your Reserved VM actual outbound IP: **136.117.70.64**  
+**ACTION REQUIRED:** Whitelist this IP in Flutterwave dashboard!
 
 ---
 
@@ -48,8 +48,9 @@ Once USDT works, try:
 ### **Check Flutterwave Dashboard:**
 1. Go to: https://dashboard.flutterwave.com
 2. Navigate: **Settings** → **API Settings** → **IP Whitelist**
-3. **Verify this IP is listed**: `34.187.148.164`
-4. **Make sure you clicked SAVE**
+3. **ADD THIS IP**: `136.117.70.64` (this is your ACTUAL outbound IP)
+4. **Remove old IP**: You can remove `34.187.148.164` if listed (not being used)
+5. **CLICK SAVE** - This is critical!
 
 ### **Check Flutterwave Balance:**
 - You need at least ₦100 + ₦10 fee = ₦110 per transfer
