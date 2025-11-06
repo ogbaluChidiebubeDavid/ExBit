@@ -45,9 +45,26 @@ I prefer simple language and direct instructions. I want iterative development w
     - **Integration**: `GET /api/rates` endpoint.
 - **Flutterwave API**:
     - **Purpose**: Nigerian bank account validation (Account Resolution API) and automatic Naira transfers (Transfers API).
-    - **Requirements**: `FLUTTERWAVE_SECRET_KEY`, Flutterwave account with sufficient balance, and whitelisting of actual outbound IP (`136.117.70.64`).
+    - **Requirements**: `FLUTTERWAVE_SECRET_KEY`, Flutterwave account with sufficient balance, and whitelisting of deployment server's static outbound IP.
     - **Minimum Transfer**: ₦100.
+    - **IP Whitelisting Issue**: Replit Reserved VMs use dynamic outbound IPs that change unpredictably, causing transfer failures. **Solution**: Migrate to Oracle Cloud for free static IP (see ORACLE_CLOUD_MIGRATION.md).
 - **Web3 Wallets**:
     - **Integration**: MetaMask, WalletConnect, Coinbase Wallet, etc., for user authentication, transaction signing, and blockchain interactions.
 - **PostgreSQL (Neon)**:
     - **Purpose**: Cloud-hosted relational database for storing all transaction records and application data.
+
+## Deployment Options
+
+### Current: Replit Reserved VM
+- **Status**: ❌ Unstable due to dynamic outbound IPs
+- **Issue**: Flutterwave requires static IP whitelisting for transfers
+- **Cost**: $20/month
+- **Recommendation**: Migrate to Oracle Cloud
+
+### Recommended: Oracle Cloud Infrastructure (OCI)
+- **Status**: ✅ Stable static IP, free forever
+- **Resources**: 2 AMD VMs or 4 ARM cores + 24GB RAM
+- **Bandwidth**: Unlimited (huge advantage)
+- **Cost**: $0/month (Always Free Tier)
+- **Setup Guide**: See `ORACLE_CLOUD_MIGRATION.md` for complete migration instructions
+- **Deployment Script**: Use `deploy-to-oracle.sh` for automated setup
