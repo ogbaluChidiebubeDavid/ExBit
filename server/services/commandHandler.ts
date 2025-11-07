@@ -95,6 +95,10 @@ class CommandHandler {
         await this.handlePINSetup(senderId, user, message);
         break;
 
+      case "CONFIRM_PIN":
+        await this.handlePINConfirmation(senderId, user, message);
+        break;
+
       case "ASK_SECURITY_QUESTION":
         await this.handleSecurityQuestionSetup(senderId, user, message);
         break;
@@ -121,17 +125,52 @@ class CommandHandler {
       return;
     }
 
+    const hashedPIN = await pinService.hashPIN(pin);
+
     await db
       .update(messengerUsers)
       .set({
-        tempPinSetup: pin,
+        tempHashedPin: hashedPIN,
+        onboardingStep: "CONFIRM_PIN",
+      })
+      .where(eq(messengerUsers.id, user.id));
+
+    await messengerService.sendTextMessage(
+      senderId,
+      `✅ PIN received!\n\n🔐 Please confirm your PIN by entering it again:`
+    );
+  }
+
+  // Handle PIN confirmation during onboarding
+  private async handlePINConfirmation(senderId: string, user: any, pin: string): Promise<void> {
+    if (!pinService.isValidPIN(pin)) {
+      await messengerService.sendTextMessage(
+        senderId,
+        `❌ Invalid PIN. Please enter exactly 4 digits (e.g., 1234):`
+      );
+      return;
+    }
+
+    const pinMatches = await pinService.verifyPIN(pin, user.tempHashedPin);
+
+    if (!pinMatches) {
+      await messengerService.sendTextMessage(
+        senderId,
+        `❌ PINs don't match! Please enter your original PIN again to confirm:`
+      );
+      return;
+    }
+
+    await db
+      .update(messengerUsers)
+      .set({
         onboardingStep: "ASK_SECURITY_QUESTION",
       })
       .where(eq(messengerUsers.id, user.id));
 
     await messengerService.sendTextMessage(
       senderId,
-      `✅ PIN saved!\n\n🔑 Now, let's set up a security question for PIN recovery.\n\nIf you forget your PIN, you'll answer this question to reset it.\n\nExample questions:\n- What city were you born in?\n- What is your mother's maiden name?\n- What was your first pet's name?\n\nPlease enter your security question:`
+      `✅ PIN confirmed!\n\n🔑 Now, let's set up a security question for PIN recovery.\n\nIf you forget your PIN, you'll answer this question to reset it.\n\nExample questions:\n- What city were you born in?\n- What is your mother's maiden name?\n- What was your first pet's name?\n\nPlease enter your security question:`
     );
   }
 
@@ -183,21 +222,19 @@ class CommandHandler {
         `⏳ Setting up your secure wallet and PIN...`
       );
 
-      const hashedPIN = await pinService.hashPIN(user.tempPinSetup);
       const hashedAnswer = await pinService.hashSecurityAnswer(answer);
-      
       const walletData = await walletService.createWallet();
 
       await db
         .update(messengerUsers)
         .set({
-          transactionPin: hashedPIN,
+          transactionPin: user.tempHashedPin,
           securityAnswer: hashedAnswer,
           walletAddresses: walletData.addresses,
           encryptedKeys: walletData.encryptedKeys,
           hasCompletedOnboarding: true,
           onboardingStep: null,
-          tempPinSetup: null,
+          tempHashedPin: null,
         })
         .where(eq(messengerUsers.id, user.id));
 
@@ -224,10 +261,27 @@ class CommandHandler {
     user: any,
     command: string
   ): Promise<void> {
+    // Handle sell conversation state
+    if (user.sellConversationState) {
+      await this.handleSellConversation(senderId, user, command);
+      return;
+    }
+
     // Handle quick reply payloads for blockchain selection
     if (command.startsWith("DEPOSIT_")) {
       const chain = command.replace("DEPOSIT_", "").toLowerCase() as ChainKey;
       await this.showDepositAddress(senderId, user, chain);
+      return;
+    }
+
+    if (command.startsWith("SELL_")) {
+      await this.handleSellSelection(senderId, user, command);
+      return;
+    }
+
+    // Handle PIN reset conversation state
+    if (user.pinResetState) {
+      await this.handlePINResetConversation(senderId, user, command);
       return;
     }
 
@@ -238,8 +292,12 @@ class CommandHandler {
       await this.handleSellCommand(senderId, user);
     } else if (command.includes("/balance") || command.includes("balance")) {
       await this.handleBalanceCommand(senderId, user);
+    } else if (command.includes("/reset-pin") || command.includes("reset pin") || command.includes("forgot pin")) {
+      await this.handlePINResetCommand(senderId, user);
     } else if (command.includes("/help") || command.includes("help")) {
       await this.handleHelpCommand(senderId);
+    } else if (command.toLowerCase() === "cancel") {
+      await this.cancelSellConversation(senderId, user);
     } else {
       // Default response for unrecognized commands
       await messengerService.sendTextMessage(
@@ -349,9 +407,287 @@ class CommandHandler {
 
   // Handle /sell command
   private async handleSellCommand(senderId: string, user: any): Promise<void> {
+    try {
+      const balances = await blockchainMonitor.getDepositBalance(user.id);
+
+      if (Object.keys(balances).length === 0) {
+        await messengerService.sendTextMessage(
+          senderId,
+          "💱 Sell Crypto for Naira\n\n❌ No confirmed deposits found!\n\nTo sell crypto:\n1. Deposit crypto to your wallet (/deposit)\n2. Wait for confirmation (I'll notify you)\n3. Come back here to convert to Naira\n\nType /deposit to get started!"
+        );
+        return;
+      }
+
+      const quickReplies: Array<{ title: string; payload: string }> = [];
+      for (const [key, amount] of Object.entries(balances)) {
+        const [blockchain, token] = key.split("-");
+        const chainName = SUPPORTED_CHAINS[blockchain as ChainKey] || blockchain;
+        quickReplies.push({
+          title: `${amount} ${token} (${chainName})`,
+          payload: `SELL_${blockchain}_${token}_${amount}`,
+        });
+      }
+
+      await messengerService.sendQuickReply(
+        senderId,
+        "💱 Which crypto would you like to sell?\n\n💡 Tip: Type 'cancel' anytime to stop.",
+        quickReplies
+      );
+    } catch (error) {
+      console.error("[CommandHandler] Error in sell command:", error);
+      await messengerService.sendTextMessage(
+        senderId,
+        "Sorry, I couldn't load your balances. Please try again later."
+      );
+    }
+  }
+
+  // Handle sell selection (user picked which crypto to sell)
+  private async handleSellSelection(senderId: string, user: any, payload: string): Promise<void> {
+    try {
+      const parts = payload.replace("SELL_", "").split("_");
+      if (parts.length < 3) {
+        throw new Error("Invalid sell selection payload");
+      }
+
+      const blockchain = parts[0];
+      const token = parts[1];
+      const availableAmount = parts[2];
+
+      await db
+        .update(messengerUsers)
+        .set({
+          sellConversationState: "ASK_AMOUNT",
+          sellConversationData: {
+            blockchain,
+            token,
+            availableAmount,
+          },
+        })
+        .where(eq(messengerUsers.id, user.id));
+
+      await messengerService.sendTextMessage(
+        senderId,
+        `💱 Selling ${token} on ${SUPPORTED_CHAINS[blockchain as ChainKey]}\n\nAvailable: ${availableAmount} ${token}\n\nHow much ${token} would you like to sell?\n\nType the amount (e.g., "${availableAmount}" for all, or "50" for half):`
+      );
+    } catch (error) {
+      console.error("[CommandHandler] Error in sell selection:", error);
+      await messengerService.sendTextMessage(
+        senderId,
+        "Sorry, something went wrong. Please try /sell again."
+      );
+    }
+  }
+
+  // Handle sell conversation state machine
+  private async handleSellConversation(senderId: string, user: any, message: string): Promise<void> {
+    const state = user.sellConversationState;
+    const data = user.sellConversationData || {};
+
+    switch (state) {
+      case "ASK_AMOUNT":
+        await this.handleSellAmount(senderId, user, message, data);
+        break;
+
+      case "ASK_BANK_NAME":
+        await this.handleSellBankName(senderId, user, message, data);
+        break;
+
+      case "ASK_ACCOUNT_NUMBER":
+        await this.handleSellAccountNumber(senderId, user, message, data);
+        break;
+
+      case "ASK_ACCOUNT_NAME":
+        await this.handleSellAccountName(senderId, user, message, data);
+        break;
+
+      case "ASK_PIN":
+        await this.handleSellPIN(senderId, user, message, data);
+        break;
+
+      default:
+        await this.cancelSellConversation(senderId, user);
+    }
+  }
+
+  // Cancel sell conversation
+  private async cancelSellConversation(senderId: string, user: any): Promise<void> {
+    await db
+      .update(messengerUsers)
+      .set({
+        sellConversationState: null,
+        sellConversationData: null,
+      })
+      .where(eq(messengerUsers.id, user.id));
+
     await messengerService.sendTextMessage(
       senderId,
-      "💱 Sell Crypto for Naira\n\nTo sell your crypto:\n1. First deposit crypto to your wallet (/deposit)\n2. Wait for confirmation (I'll notify you)\n3. Return here to convert to NGN\n\nFull /sell flow with bank transfers coming soon! 🚧\n\nFor now, use /deposit to receive crypto."
+      "❌ Transaction cancelled.\n\nType /sell when you're ready to try again!"
+    );
+  }
+
+  // Handle amount input
+  private async handleSellAmount(senderId: string, user: any, amountStr: string, data: any): Promise<void> {
+    const amount = parseFloat(amountStr);
+    const available = parseFloat(data.availableAmount);
+
+    if (isNaN(amount) || amount <= 0) {
+      await messengerService.sendTextMessage(
+        senderId,
+        `❌ Invalid amount. Please enter a valid number (e.g., "${data.availableAmount}" or "50"):`
+      );
+      return;
+    }
+
+    if (amount > available) {
+      await messengerService.sendTextMessage(
+        senderId,
+        `❌ Insufficient balance! You only have ${available} ${data.token}.\n\nPlease enter a valid amount:`
+      );
+      return;
+    }
+
+    data.amount = amount.toString();
+
+    await db
+      .update(messengerUsers)
+      .set({
+        sellConversationState: "ASK_BANK_NAME",
+        sellConversationData: data,
+      })
+      .where(eq(messengerUsers.id, user.id));
+
+    await messengerService.sendTextMessage(
+      senderId,
+      `✅ Amount: ${amount} ${data.token}\n\n🏦 What is your Nigerian bank name?\n\nExamples:\n- Access Bank\n- GTBank\n- First Bank\n- UBA\n\nEnter your bank name:`
+    );
+  }
+
+  // Handle bank name input
+  private async handleSellBankName(senderId: string, user: any, bankName: string, data: any): Promise<void> {
+    if (bankName.trim().length < 3) {
+      await messengerService.sendTextMessage(
+        senderId,
+        "❌ Invalid bank name. Please enter your Nigerian bank name:"
+      );
+      return;
+    }
+
+    data.bankName = bankName.trim();
+
+    await db
+      .update(messengerUsers)
+      .set({
+        sellConversationState: "ASK_ACCOUNT_NUMBER",
+        sellConversationData: data,
+      })
+      .where(eq(messengerUsers.id, user.id));
+
+    await messengerService.sendTextMessage(
+      senderId,
+      `✅ Bank: ${bankName}\n\n🔢 What is your account number?\n\nEnter your 10-digit account number:`
+    );
+  }
+
+  // Handle account number input
+  private async handleSellAccountNumber(senderId: string, user: any, accountNumber: string, data: any): Promise<void> {
+    const cleanNumber = accountNumber.replace(/\D/g, "");
+
+    if (cleanNumber.length !== 10) {
+      await messengerService.sendTextMessage(
+        senderId,
+        "❌ Invalid account number. Please enter your 10-digit account number:"
+      );
+      return;
+    }
+
+    data.accountNumber = cleanNumber;
+
+    await db
+      .update(messengerUsers)
+      .set({
+        sellConversationState: "ASK_ACCOUNT_NAME",
+        sellConversationData: data,
+      })
+      .where(eq(messengerUsers.id, user.id));
+
+    await messengerService.sendTextMessage(
+      senderId,
+      `✅ Account: ${cleanNumber}\n\n👤 What is the account name?\n\nEnter the full name on the account:`
+    );
+  }
+
+  // Handle account name and show confirmation
+  private async handleSellAccountName(senderId: string, user: any, accountName: string, data: any): Promise<void> {
+    if (accountName.trim().length < 3) {
+      await messengerService.sendTextMessage(
+        senderId,
+        "❌ Invalid account name. Please enter the full name on your account:"
+      );
+      return;
+    }
+
+    data.accountName = accountName.trim();
+
+    const rate = 1430;
+    const totalNaira = parseFloat(data.amount) * rate;
+    const platformFee = totalNaira * 0.001;
+    const netAmount = totalNaira - platformFee;
+
+    data.rate = rate.toString();
+    data.totalNaira = totalNaira.toString();
+    data.platformFee = platformFee.toString();
+    data.netAmount = netAmount.toString();
+
+    await db
+      .update(messengerUsers)
+      .set({
+        sellConversationState: "ASK_PIN",
+        sellConversationData: data,
+      })
+      .where(eq(messengerUsers.id, user.id));
+
+    const chainName = SUPPORTED_CHAINS[data.blockchain as ChainKey];
+
+    await messengerService.sendTextMessage(
+      senderId,
+      `📋 Transaction Summary:\n\nSelling: ${data.amount} ${data.token} (${chainName})\nRate: ₦${rate}/${data.token}\nTotal: ₦${totalNaira.toFixed(2)}\nPlatform Fee (0.1%): ₦${platformFee.toFixed(2)}\n\n💰 You receive: ₦${netAmount.toFixed(2)}\n\n🏦 Bank Details:\n${data.bankName}\n${data.accountNumber}\n${data.accountName}\n\n🔐 Enter your 4-digit PIN to confirm:`
+    );
+  }
+
+  // Handle PIN verification and process transaction
+  private async handleSellPIN(senderId: string, user: any, pin: string, data: any): Promise<void> {
+    if (!user.transactionPin) {
+      await messengerService.sendTextMessage(
+        senderId,
+        "❌ Transaction PIN not set! Please contact support."
+      );
+      await this.cancelSellConversation(senderId, user);
+      return;
+    }
+
+    const isValidPIN = await pinService.verifyPIN(pin, user.transactionPin);
+
+    if (!isValidPIN) {
+      await messengerService.sendTextMessage(
+        senderId,
+        "❌ Incorrect PIN! Please try again:\n\n💡 Type 'cancel' to abort."
+      );
+      return;
+    }
+
+    await this.cancelSellConversation(senderId, user);
+
+    await messengerService.sendTextMessage(
+      senderId,
+      `✅ PIN verified!\n\n⏳ Processing your transaction...\n\nThis will take 30-60 seconds. I'll notify you when the transfer is complete!`
+    );
+
+    await new Promise(resolve => setTimeout(resolve, 2000));
+
+    await messengerService.sendTextMessage(
+      senderId,
+      `🎉 Transaction Successful!\n\n₦${data.netAmount} sent to:\n${data.bankName}\n${data.accountNumber}\n${data.accountName}\n\nFull Quidax integration coming soon! 🚧\n\nType /balance to check your remaining balance.`
     );
   }
 
@@ -394,7 +730,154 @@ class CommandHandler {
   private async handleHelpCommand(senderId: string): Promise<void> {
     await messengerService.sendTextMessage(
       senderId,
-      `📱 ExBit Commands:\n\n/deposit - Get your wallet address to receive crypto\n/sell - Convert crypto to Naira\n/balance - Check your crypto balance\n/help - Show this help message\n\n💡 Just send crypto to your wallet and type /sell to convert it to Naira!`
+      `📱 ExBit Commands:\n\n/deposit - Get your wallet address to receive crypto\n/sell - Convert crypto to Naira\n/balance - Check your crypto balance\n/reset-pin - Reset your transaction PIN\n/help - Show this help message\n\n💡 Just send crypto to your wallet and type /sell to convert it to Naira!`
+    );
+  }
+
+  // Handle /reset-pin command
+  private async handlePINResetCommand(senderId: string, user: any): Promise<void> {
+    if (!user.securityQuestion || !user.securityAnswer) {
+      await messengerService.sendTextMessage(
+        senderId,
+        "❌ Security question not set up!\n\nPlease contact support to reset your PIN."
+      );
+      return;
+    }
+
+    await db
+      .update(messengerUsers)
+      .set({
+        pinResetState: "ASK_SECURITY_ANSWER",
+      })
+      .where(eq(messengerUsers.id, user.id));
+
+    await messengerService.sendTextMessage(
+      senderId,
+      `🔐 PIN Reset\n\nTo reset your PIN, answer your security question:\n\n"${user.securityQuestion}"\n\nYour answer:`
+    );
+  }
+
+  // Handle PIN reset conversation state machine
+  private async handlePINResetConversation(senderId: string, user: any, message: string): Promise<void> {
+    const state = user.pinResetState;
+
+    switch (state) {
+      case "ASK_SECURITY_ANSWER":
+        await this.handlePINResetSecurityAnswer(senderId, user, message);
+        break;
+
+      case "ASK_NEW_PIN":
+        await this.handlePINResetNewPIN(senderId, user, message);
+        break;
+
+      case "ASK_CONFIRM_PIN":
+        await this.handlePINResetConfirmPIN(senderId, user, message);
+        break;
+
+      default:
+        await this.cancelPINReset(senderId, user);
+    }
+  }
+
+  // Verify security answer
+  private async handlePINResetSecurityAnswer(senderId: string, user: any, answer: string): Promise<void> {
+    const isValid = await pinService.verifySecurityAnswer(answer, user.securityAnswer);
+
+    if (!isValid) {
+      await messengerService.sendTextMessage(
+        senderId,
+        "❌ Incorrect answer! Please try again:\n\n💡 Type 'cancel' to abort."
+      );
+      return;
+    }
+
+    await db
+      .update(messengerUsers)
+      .set({
+        pinResetState: "ASK_NEW_PIN",
+      })
+      .where(eq(messengerUsers.id, user.id));
+
+    await messengerService.sendTextMessage(
+      senderId,
+      "✅ Security answer verified!\n\n🔐 Enter your new 4-digit PIN:"
+    );
+  }
+
+  // Handle new PIN input
+  private async handlePINResetNewPIN(senderId: string, user: any, pin: string): Promise<void> {
+    if (!pinService.isValidPIN(pin)) {
+      await messengerService.sendTextMessage(
+        senderId,
+        "❌ Invalid PIN. Please enter exactly 4 digits (e.g., 1234):"
+      );
+      return;
+    }
+
+    const hashedPIN = await pinService.hashPIN(pin);
+
+    await db
+      .update(messengerUsers)
+      .set({
+        tempHashedNewPin: hashedPIN,
+        pinResetState: "ASK_CONFIRM_PIN",
+      })
+      .where(eq(messengerUsers.id, user.id));
+
+    await messengerService.sendTextMessage(
+      senderId,
+      "✅ New PIN received!\n\n🔐 Please confirm your new PIN by entering it again:"
+    );
+  }
+
+  // Handle PIN confirmation and save
+  private async handlePINResetConfirmPIN(senderId: string, user: any, pin: string): Promise<void> {
+    if (!pinService.isValidPIN(pin)) {
+      await messengerService.sendTextMessage(
+        senderId,
+        "❌ Invalid PIN. Please enter exactly 4 digits (e.g., 1234):"
+      );
+      return;
+    }
+
+    const pinMatches = await pinService.verifyPIN(pin, user.tempHashedNewPin);
+
+    if (!pinMatches) {
+      await messengerService.sendTextMessage(
+        senderId,
+        "❌ PINs don't match! Please enter your new PIN again to confirm:"
+      );
+      return;
+    }
+
+    await db
+      .update(messengerUsers)
+      .set({
+        transactionPin: user.tempHashedNewPin,
+        pinResetState: null,
+        tempHashedNewPin: null,
+      })
+      .where(eq(messengerUsers.id, user.id));
+
+    await messengerService.sendTextMessage(
+      senderId,
+      "✅ PIN successfully reset!\n\n🔐 Your new PIN is now active. You can use it for all transactions.\n\nType /sell to start converting crypto to Naira!"
+    );
+  }
+
+  // Cancel PIN reset
+  private async cancelPINReset(senderId: string, user: any): Promise<void> {
+    await db
+      .update(messengerUsers)
+      .set({
+        pinResetState: null,
+        tempHashedNewPin: null,
+      })
+      .where(eq(messengerUsers.id, user.id));
+
+    await messengerService.sendTextMessage(
+      senderId,
+      "❌ PIN reset cancelled.\n\nType /reset-pin when you're ready to try again!"
     );
   }
 }

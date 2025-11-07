@@ -21,7 +21,13 @@ export const messengerUsers = pgTable("messenger_users", {
   // Onboarding status
   hasCompletedOnboarding: boolean("has_completed_onboarding").default(false).notNull(),
   onboardingStep: text("onboarding_step"),
-  tempPinSetup: text("temp_pin_setup"),
+  tempHashedPin: text("temp_hashed_pin"),
+  // Sell conversation state
+  sellConversationState: text("sell_conversation_state"),
+  sellConversationData: json("sell_conversation_data"),
+  // PIN reset state
+  pinResetState: text("pin_reset_state"),
+  tempHashedNewPin: text("temp_hashed_new_pin"),
   createdAt: timestamp("created_at").defaultNow().notNull(),
 });
 
