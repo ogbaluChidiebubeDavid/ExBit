@@ -56,7 +56,9 @@ export const BLOCKCHAIN_CONFIG = {
   },
   base: {
     name: "Base",
-    rpcUrl: process.env.ALCHEMY_BASE_RPC_URL || "https://base-rpc.publicnode.com",
+    rpcUrl: process.env.ALCHEMY_BASE_API_KEY 
+      ? `https://base-mainnet.g.alchemy.com/v2/${process.env.ALCHEMY_BASE_API_KEY}`
+      : "https://base-rpc.publicnode.com",
     chainId: 8453,
     blockTime: 2000, // 2 seconds
     confirmations: 20,
