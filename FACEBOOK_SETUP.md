@@ -1,151 +1,163 @@
-# Facebook Messenger Bot Setup Guide
+# Facebook Messenger Bot Setup Guide (Updated 2024-2025)
 
-This guide will walk you through setting up ExBit as a Facebook Messenger bot, from creating a Facebook App to connecting the webhook.
+This guide walks you through setting up ExBit as a Facebook Messenger bot using the latest Meta for Developers platform.
 
 ## Prerequisites
 
-- Facebook account
-- Facebook Page (create one if you don't have it)
-- Replit project running (ExBit backend must be accessible via HTTPS)
+✅ Facebook account  
+✅ Facebook Page (create at [facebook.com/pages/create](https://facebook.com/pages/create))  
+✅ Replit project running (ExBit webhook ready)
 
 ## Step 1: Create a Facebook App
 
-1. Go to [Facebook Developers](https://developers.facebook.com/)
-2. Click **"My Apps"** → **"Create App"**
-3. Choose **"Business"** as the app type
-4. Fill in app details:
-   - **App Name**: ExBit
-   - **App Contact Email**: Your email
-   - **Business Account**: (Optional) Create or select one
+1. Go to [Meta for Developers](https://developers.facebook.com)
+2. Click **"My Apps"** (top right) → **"Create App"**
+3. **Select app type**: Choose **"Business"** → Click **"Next"**
+4. **Fill in basic information**:
+   - **App Name**: `ExBit` (or your preferred name)
+   - **Contact Email**: Your email address
 5. Click **"Create App"**
+6. **Enter your Facebook password** to confirm creation
 
 ## Step 2: Add Messenger Product
 
-1. In your app dashboard, find **"Add Products to Your App"**
-2. Locate **"Messenger"** and click **"Set Up"**
-3. This will add Messenger to your app
+1. From your app dashboard, scroll to **"Add Products to Your App"**
+2. Find **"Messenger"** in the product list
+3. Click **"Set Up"** next to Messenger
+4. Messenger will be added to your left sidebar navigation
 
-## Step 3: Create a Facebook Page (if you don't have one)
+## Step 3: Get App Credentials
 
-1. Go to [Facebook Pages](https://www.facebook.com/pages/create)
-2. Choose **"Business or Brand"**
-3. Enter page details:
-   - **Page Name**: ExBit
-   - **Category**: Financial Service or Technology Company
-   - **Description**: "Convert cryptocurrency to Naira instantly via Messenger"
-4. Click **"Create Page"**
+### Get App Secret (for webhook signature verification)
+
+1. In the left sidebar, click **Settings → Basic**
+2. Copy your **App ID** (save this)
+3. Click **"Show"** next to **App Secret**
+4. Copy the **App Secret**
+5. In Replit, add this as a secret:
+   - Secret Name: `FACEBOOK_APP_SECRET`
+   - Secret Value: (paste the App Secret here)
+
+⚠️ **Keep this secret secure!** It verifies webhook requests are from Facebook.
 
 ## Step 4: Generate Page Access Token
 
-1. In your Facebook App dashboard, go to **Messenger** → **Settings**
+### If you don't have a Facebook Page yet:
+1. Go to [facebook.com/pages/create](https://facebook.com/pages/create)
+2. Create a page for your bot (e.g., "ExBit Bot")
+3. Choose category: "Financial Service" or "App Page"
+
+### Generate the token:
+
+1. In your app dashboard, go to **Messenger → Messenger API Settings**
 2. Scroll to **"Access Tokens"** section
 3. Click **"Add or Remove Pages"**
-4. Select your ExBit page and grant permissions
-5. Click **"Generate Token"** for your page
-6. **IMPORTANT**: Copy this token - you'll need it for Replit secrets
+4. Select your Facebook Page and grant all requested permissions
+5. Click **"Generate Token"** next to your page
+6. **Copy the Page Access Token** (starts with `EAA...`)
+7. In Replit, add this as a secret:
+   - Secret Name: `FACEBOOK_PAGE_ACCESS_TOKEN`
+   - Secret Value: (paste the token here)
 
-## Step 5: Configure Replit Secrets
+⚠️ **Critical**: This token allows sending messages as your page - never share it!
 
-Add these secrets to your Replit project:
+## Step 5: Create a Verify Token
 
-### Required Secrets:
+1. Choose a random, secure string (e.g., `exbit_webhook_verify_123abc`)
+2. In Replit, add this as a secret:
+   - Secret Name: `FACEBOOK_VERIFY_TOKEN`
+   - Secret Value: (your chosen string)
 
-1. **FACEBOOK_PAGE_ACCESS_TOKEN**
-   - Value: The token you generated in Step 4
-   - This allows ExBit to send messages as your page
+This token verifies Facebook is connecting to your webhook.
 
-2. **FACEBOOK_APP_SECRET**
-   - Go to **App Dashboard** → **Settings** → **Basic**
-   - Copy the **"App Secret"** (click "Show")
-   - This is used to verify webhook requests
+## Step 6: Configure Webhook in Facebook
 
-3. **FACEBOOK_VERIFY_TOKEN**
-   - Create your own random string (e.g., `exbit_verify_2024_secure`)
-   - This is used during webhook setup
-   - Keep it secure and unique
+### A. Get Your Replit Webhook URL
 
-### How to Add Secrets in Replit:
-1. Open your Replit project
-2. Click the **🔒 Secrets** icon (or Tools → Secrets)
-3. Add each secret with the exact key names above
-4. Paste the corresponding values
-
-## Step 6: Get Your Webhook URL
-
-Your Replit webhook URL will be:
+Your webhook URL format is:
 ```
-https://YOUR-REPL-NAME.YOUR-USERNAME.repl.co/webhook
+https://[username]-[project-name].repl.co/webhook
 ```
 
-For example:
-```
-https://exbit.yourusername.repl.co/webhook
-```
+Example: `https://johndoe-exbit.repl.co/webhook`
 
-**Note**: Your Replit app must be running for the webhook to work!
+⚠️ **Make sure your Replit app is RUNNING before the next step!**
 
-## Step 7: Set Up Webhook in Facebook
+### B. Add the Webhook to Facebook
 
-1. Go to **Messenger** → **Settings** in your Facebook App
-2. Scroll to **"Webhooks"** section
-3. Click **"Add Callback URL"**
+1. In **Messenger API Settings**, scroll to **"Webhooks"** section
+2. Click **"Add Callback URL"**
+3. Enter:
+   - **Callback URL**: Your Replit webhook URL from above
+   - **Verify Token**: The exact token you created in Step 5
+4. Click **"Verify and Save"**
 
-4. Enter webhook details:
-   - **Callback URL**: `https://YOUR-REPL-NAME.YOUR-USERNAME.repl.co/webhook`
-   - **Verify Token**: The same value you used for `FACEBOOK_VERIFY_TOKEN` secret
-   
-5. Click **"Verify and Save"**
+✅ You should see "Complete" with a green checkmark
 
-6. If successful, you'll see a green checkmark ✅
+**If it fails:**
+- Check your Replit app is running
+- Verify the `FACEBOOK_VERIFY_TOKEN` secret matches exactly
+- Check the webhook URL is correct (no typos)
 
-## Step 8: Subscribe to Webhook Events
+### C. Subscribe to Events
 
-After adding the callback URL:
+1. Still in the Webhooks section, click **"Add Subscriptions"**
+2. Check these boxes:
+   - ✅ `messages` (required - receive messages)
+   - ✅ `messaging_postbacks` (required - handle buttons)
+   - ☐ `message_deliveries` (optional)
+   - ☐ `message_reads` (optional)
+3. Click **"Save"**
 
-1. In the **"Webhooks"** section, find your page
-2. Click **"Add Subscriptions"**
-3. Select these events:
-   - ✅ **messages** (required for receiving user messages)
-   - ✅ **messaging_postbacks** (optional, for button clicks)
-   - ✅ **message_deliveries** (optional, for delivery receipts)
-   - ✅ **message_reads** (optional, for read receipts)
+## Step 7: Subscribe App to Your Page
 
-4. Click **"Save"**
+1. In the Webhooks section, find **"Add Subscriptions"** dropdown
+2. Select your Facebook Page
+3. Click **"Subscribe"**
 
-## Step 9: Test Your Bot
+Your bot is now connected! 🎉
 
-### Option 1: Message Your Page Directly
-1. Go to your Facebook Page
+## Step 8: Test Your Bot!
+
+### Send a Test Message
+
+1. Go to your Facebook Page (on Facebook)
 2. Click **"Send Message"**
-3. Type `/help` to test the bot
+3. Type: `hi`
 
-### Option 2: Use Messenger Platform Tester
-1. In Facebook App dashboard, go to **Messenger** → **Settings**
-2. Scroll to **"Built-In NLP"**
-3. Use the test console to send messages
+**Expected response:**
+```
+Welcome to ExBit, [Your Name]! 👋
 
-### Expected Bot Responses:
-- `/help` - Shows available commands
-- `/deposit` - Shows blockchain selection buttons
-- `/balance` - Shows balance (coming soon)
-- `/sell` - Initiates sell flow (coming soon)
+I'm your crypto exchange assistant...
 
-## Step 10: Verify Webhook is Working
+🔐 To keep your funds secure, let's set up a 4-digit transaction PIN.
 
-Check your Replit logs for webhook activity:
+Please enter a 4-digit PIN (e.g., 1234):
+```
 
-1. Open Replit **Shell** or **Console**
-2. Look for log messages like:
-   ```
-   [Webhook] Webhook verified successfully
-   [CommandHandler] Processing message from user...
-   ```
+### Test Commands
 
-3. If you see errors, check:
-   - All secrets are correctly set
-   - Webhook URL matches your Repl URL
-   - Verify token matches exactly
-   - App is running on Replit
+Once onboarded, try these:
+- `/deposit` - Get your wallet address
+- `/balance` - Check crypto balance
+- `/sell` - Convert crypto to Naira
+- `/reset-pin` - Reset your PIN
+- `/help` - Show all commands
+
+### Check Logs
+
+In your Replit console, you should see:
+```
+[Webhook] Received message from user: ...
+[CommandHandler] Processing message...
+```
+
+**If the bot doesn't respond:**
+1. Check all 3 secrets are set in Replit
+2. Verify webhook is subscribed to your page
+3. Ensure Replit app is running
+4. Check Replit logs for errors
 
 ## Troubleshooting
 

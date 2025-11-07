@@ -223,15 +223,23 @@ class CommandHandler {
       );
 
       const hashedAnswer = await pinService.hashSecurityAnswer(answer);
-      const walletData = await walletService.createWallet();
+      const { encryptedMnemonic, wallets } = walletService.createNewWallet();
+      
+      const walletAddresses = {
+        ethereum: wallets.ethereum.address,
+        bsc: wallets.bsc.address,
+        polygon: wallets.polygon.address,
+        arbitrum: wallets.arbitrum.address,
+        base: wallets.base.address,
+      };
 
       await db
         .update(messengerUsers)
         .set({
           transactionPin: user.tempHashedPin,
           securityAnswer: hashedAnswer,
-          walletAddresses: walletData.addresses,
-          encryptedKeys: walletData.encryptedKeys,
+          walletAddresses,
+          encryptedKeys: encryptedMnemonic,
           hasCompletedOnboarding: true,
           onboardingStep: null,
           tempHashedPin: null,
