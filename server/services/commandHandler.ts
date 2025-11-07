@@ -220,7 +220,7 @@ class CommandHandler {
   private async handleSellCommand(senderId: string, user: any): Promise<void> {
     await messengerService.sendTextMessage(
       senderId,
-      "The /sell command is coming soon! 🚧\n\nFor now, use /deposit to get your wallet address."
+      "💱 Sell Crypto for Naira\n\nTo sell your crypto:\n1. First deposit crypto to your wallet (/deposit)\n2. Wait for confirmation (I'll notify you)\n3. Return here to convert to NGN\n\nFull /sell flow with bank transfers coming soon! 🚧\n\nFor now, use /deposit to receive crypto."
     );
   }
 
