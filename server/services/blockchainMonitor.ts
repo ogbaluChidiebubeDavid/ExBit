@@ -264,17 +264,23 @@ class BlockchainMonitorService {
 
       let lastCheckedBlock = stateRecord
         ? parseInt(stateRecord.lastCheckedBlock)
-        : Math.max(0, currentBlock - 100); // Only use 100-block lookback for brand new wallets
+        : Math.max(0, currentBlock - 1000); // Look back 1000 blocks for brand new wallets (~33 mins on Base)
 
-      // Limit block range to prevent performance issues (max 50 blocks per check)
+      // Limit block range to comply with Alchemy free tier (max 10 blocks per eth_getLogs request)
       // Process in chunks to catch up if there's a backlog
-      const maxBlocksPerCheck = 50;
+      const maxBlocksPerCheck = 10;
       const fromBlock = lastCheckedBlock;
-      const toBlock = Math.min(currentBlock, lastCheckedBlock + maxBlocksPerCheck);
+      // eth_getLogs is inclusive of both fromBlock and toBlock, so we need maxBlocks-1
+      const toBlock = Math.min(currentBlock, fromBlock + (maxBlocksPerCheck - 1));
 
       // Skip if no new blocks to check
       if (fromBlock >= toBlock) {
         return;
+      }
+
+      // Add detailed logging for Base chain
+      if (blockchain === 'base') {
+        console.log(`[BlockchainMonitor] Base: Checking blocks ${fromBlock} to ${toBlock} (current: ${currentBlock})`);
       }
 
       // Check native token transfers (ETH, BNB, MATIC, etc.)
@@ -309,23 +315,26 @@ class BlockchainMonitorService {
       const lastBlockKey = `${blockchain}-${address}`;
       this.lastCheckedBlocks.set(lastBlockKey, toBlock);
 
-      // Persist to database (so restarts don't lose state)
-      if (stateRecord) {
-        await db
-          .update(monitoringState)
-          .set({
-            lastCheckedBlock: toBlock.toString(),
-            updatedAt: new Date(),
-          })
-          .where(eq(monitoringState.id, stateRecord.id));
-      } else {
-        await db.insert(monitoringState).values({
+      // Persist to database using UPSERT (prevents race condition errors)
+      await db
+        .insert(monitoringState)
+        .values({
           messengerUserId,
           blockchain,
           walletAddress: address,
           lastCheckedBlock: toBlock.toString(),
+        })
+        .onConflictDoUpdate({
+          target: [
+            monitoringState.messengerUserId,
+            monitoringState.blockchain,
+            monitoringState.walletAddress,
+          ],
+          set: {
+            lastCheckedBlock: toBlock.toString(),
+            updatedAt: new Date(),
+          },
         });
-      }
     } catch (error: any) {
       console.error(
         `[BlockchainMonitor] Error checking deposits for ${blockchain}:`,
