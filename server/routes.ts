@@ -115,6 +115,19 @@ export async function registerRoutes(app: Express): Promise<Server> {
     }
   });
 
+  // Debug endpoint - Check Facebook secrets status
+  app.get("/api/debug/secrets", async (req, res) => {
+    const verifyToken = process.env.FACEBOOK_VERIFY_TOKEN;
+    const pageToken = process.env.FACEBOOK_PAGE_ACCESS_TOKEN;
+    const appSecret = process.env.FACEBOOK_APP_SECRET;
+    
+    res.json({
+      FACEBOOK_VERIFY_TOKEN: verifyToken ? `Set (${verifyToken.length} chars): ${verifyToken}` : "NOT SET - using default",
+      FACEBOOK_PAGE_ACCESS_TOKEN: pageToken ? `Set (${pageToken.length} chars)` : "NOT SET",
+      FACEBOOK_APP_SECRET: appSecret ? `Set (${appSecret.length} chars)` : "NOT SET",
+    });
+  });
+
   // Diagnostic endpoint to check Flutterwave key status
   app.get("/api/payment-status", async (req, res) => {
     const apiKey = process.env.FLUTTERWAVE_SECRET_KEY;
