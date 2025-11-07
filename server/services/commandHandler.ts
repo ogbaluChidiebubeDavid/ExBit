@@ -1,4 +1,5 @@
 import { messengerService } from "./messengerService";
+import { walletService, type ChainKey, SUPPORTED_CHAINS } from "./walletService";
 import { db } from "../db";
 import { messengerUsers } from "@shared/schema";
 import { eq } from "drizzle-orm";
@@ -96,6 +97,13 @@ class CommandHandler {
     user: any,
     command: string
   ): Promise<void> {
+    // Handle quick reply payloads for blockchain selection
+    if (command.startsWith("DEPOSIT_")) {
+      const chain = command.replace("DEPOSIT_", "").toLowerCase() as ChainKey;
+      await this.showDepositAddress(senderId, user, chain);
+      return;
+    }
+
     // Check for command keywords
     if (command.includes("/deposit") || command.includes("deposit")) {
       await this.handleDepositCommand(senderId, user);
@@ -114,8 +122,57 @@ class CommandHandler {
     }
   }
 
+  // Show deposit address for selected blockchain
+  private async showDepositAddress(
+    senderId: string,
+    user: any,
+    chain: ChainKey
+  ): Promise<void> {
+    try {
+      if (!user.walletAddresses) {
+        throw new Error("User wallet not found");
+      }
+
+      const address = user.walletAddresses[chain];
+      const chainName = walletService.getChainName(chain);
+
+      await messengerService.sendTextMessage(
+        senderId,
+        `💰 Your ${chainName} Wallet Address:\n\n${address}\n\n📝 Send any supported tokens (USDT, USDC, ETH, BNB, etc.) to this address.\n\n⚠️ Important:\n• Only send tokens on ${chainName}\n• Sending on wrong chain = lost funds!\n• I'll notify you when I receive your deposit\n\nType /balance to check your balance after depositing.`
+      );
+    } catch (error) {
+      console.error("[CommandHandler] Error showing deposit address:", error);
+      await messengerService.sendTextMessage(
+        senderId,
+        "Sorry, I couldn't retrieve your wallet address. Please try /deposit again."
+      );
+    }
+  }
+
   // Handle /deposit command
   private async handleDepositCommand(senderId: string, user: any): Promise<void> {
+    // Check if user has wallet addresses
+    if (!user.encryptedKeys || !user.walletAddresses) {
+      // Generate new wallet for user
+      await this.generateWalletForUser(senderId, user.id);
+      
+      await messengerService.sendTextMessage(
+        senderId,
+        "Creating your secure wallet... ✨"
+      );
+      
+      await new Promise(resolve => setTimeout(resolve, 1000));
+      
+      // Refresh user data
+      const updatedUsers = await db
+        .select()
+        .from(messengerUsers)
+        .where(eq(messengerUsers.id, user.id))
+        .limit(1);
+      
+      user = updatedUsers[0];
+    }
+
     await messengerService.sendQuickReply(
       senderId,
       "Which blockchain would you like to deposit on?",
@@ -127,6 +184,36 @@ class CommandHandler {
         { title: "Base", payload: "DEPOSIT_BASE" },
       ]
     );
+  }
+
+  // Generate wallet for a new user
+  private async generateWalletForUser(senderId: string, userId: string): Promise<void> {
+    try {
+      const { encryptedMnemonic, wallets } = walletService.createNewWallet();
+      
+      // Store wallet addresses as JSON
+      const walletAddresses = {
+        ethereum: wallets.ethereum.address,
+        bsc: wallets.bsc.address,
+        polygon: wallets.polygon.address,
+        arbitrum: wallets.arbitrum.address,
+        base: wallets.base.address,
+      };
+
+      // Update user with encrypted mnemonic and wallet addresses
+      await db
+        .update(messengerUsers)
+        .set({
+          encryptedKeys: encryptedMnemonic,
+          walletAddresses,
+        })
+        .where(eq(messengerUsers.id, userId));
+
+      console.log(`[WalletService] Created wallet for user ${senderId}`);
+    } catch (error) {
+      console.error("[WalletService] Error generating wallet:", error);
+      throw error;
+    }
   }
 
   // Handle /sell command
