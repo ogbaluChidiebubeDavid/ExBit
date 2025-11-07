@@ -3,8 +3,7 @@ import { useQuery, useMutation } from "@tanstack/react-query";
 import { queryClient } from "@/lib/queryClient";
 import { Header } from "@/components/Header";
 import { StepIndicator } from "@/components/StepIndicator";
-import { BlockchainSelector } from "@/components/BlockchainSelector";
-import { TokenAmountInput } from "@/components/TokenAmountInput";
+import { AIAgentInterface } from "@/components/AIAgentInterface";
 import { ConversionDisplay } from "@/components/ConversionDisplay";
 import { BankDetailsForm } from "@/components/BankDetailsForm";
 import { SwapSummary } from "@/components/SwapSummary";
@@ -313,7 +312,41 @@ export default function SwapPage() {
     setTransactionId("");
   };
 
-  const steps = ["Network", "Amount", "Bank Details", "Confirm"];
+  const handleAICommand = async (params: { amount: string; token: string; blockchain: string }) => {
+    setBlockchain(params.blockchain);
+    setSelectedToken(params.token);
+    setAmount(params.amount);
+    
+    try {
+      if (walletAddress) {
+        await web3Service.switchChain(params.blockchain);
+        setIsCorrectChain(true);
+        
+        const balance = await web3Service.getTokenBalance(
+          params.blockchain,
+          params.token,
+          walletAddress
+        );
+        setTokenBalance(balance);
+      }
+      
+      setTimeout(() => {
+        setCurrentStep(2);
+      }, 1000);
+    } catch (error: any) {
+      console.error("Failed to switch chain or fetch balance:", error);
+      setIsCorrectChain(false);
+      setTokenBalance("0");
+      
+      toast({
+        title: "Network Switch Failed",
+        description: `Please manually switch to ${params.blockchain} network`,
+        variant: "destructive",
+      });
+    }
+  };
+
+  const steps = ["AI Command", "Confirm Amount", "Bank Details", "Confirm"];
 
   return (
     <div className="min-h-screen bg-background flex flex-col">
@@ -325,50 +358,63 @@ export default function SwapPage() {
             <StepIndicator currentStep={currentStep} steps={steps} />
           )}
 
-          <Card className="p-6 md:p-8">
-            {currentStep === 1 && (
-              <div className="space-y-6">
-                <div>
-                  <h2 className="text-2xl font-semibold mb-2">Select Network</h2>
-                  <p className="text-sm text-muted-foreground">
-                    Choose the blockchain network for your swap
-                  </p>
-                </div>
-                <BlockchainSelector
-                  selected={blockchain}
-                  onSelect={(chain) => {
-                    setBlockchain(chain);
-                    const tokens = TOKEN_INFO[chain as keyof typeof TOKEN_INFO] || [];
-                    setSelectedToken(tokens[0]?.symbol || "");
-                  }}
-                />
-                <Button
-                  onClick={handleNextStep}
-                  disabled={!canProceedFromStep1}
-                  className="w-full"
-                  data-testid="button-next-step"
-                >
-                  Continue
-                </Button>
+          {currentStep === 1 && (
+            <div className="space-y-6">
+              <div>
+                <h2 className="text-2xl font-semibold mb-2">ExBit AI Agent</h2>
+                <p className="text-sm text-muted-foreground">
+                  Tell me what you'd like to swap
+                </p>
               </div>
-            )}
+              <AIAgentInterface
+                onCommandParsed={handleAICommand}
+                walletConnected={isConnected}
+              />
+              {!isConnected && (
+                <Card className="p-4 bg-muted/50">
+                  <p className="text-sm text-muted-foreground text-center">
+                    Connect your wallet in the header to start swapping
+                  </p>
+                </Card>
+              )}
+            </div>
+          )}
+
+          {currentStep !== 1 && (
+            <Card className="p-6 md:p-8">
+            {/* Step 1 removed - now using AI agent */}
 
             {currentStep === 2 && (
               <div className="space-y-6">
                 <div>
-                  <h2 className="text-2xl font-semibold mb-2">Enter Amount</h2>
+                  <h2 className="text-2xl font-semibold mb-2">Confirm Your Swap</h2>
                   <p className="text-sm text-muted-foreground">
-                    How much do you want to swap?
+                    Review the conversion and continue
                   </p>
                 </div>
-                <TokenAmountInput
-                  blockchain={blockchain}
-                  selectedToken={selectedToken}
-                  amount={amount}
-                  onTokenChange={setSelectedToken}
-                  onAmountChange={setAmount}
-                  walletAddress={walletAddress || undefined}
-                />
+                
+                {/* Show swap summary */}
+                <div className="p-4 bg-muted rounded-lg space-y-2">
+                  <div className="flex justify-between">
+                    <span className="text-sm text-muted-foreground">Blockchain</span>
+                    <span className="font-medium capitalize">{blockchain}</span>
+                  </div>
+                  <div className="flex justify-between">
+                    <span className="text-sm text-muted-foreground">Token</span>
+                    <span className="font-medium">{selectedToken}</span>
+                  </div>
+                  <div className="flex justify-between">
+                    <span className="text-sm text-muted-foreground">Amount</span>
+                    <span className="font-medium font-mono">{amount} {selectedToken}</span>
+                  </div>
+                  {walletAddress && (
+                    <div className="flex justify-between">
+                      <span className="text-sm text-muted-foreground">Your Balance</span>
+                      <span className="font-medium font-mono">{tokenBalance} {selectedToken}</span>
+                    </div>
+                  )}
+                </div>
+
                 {amount && parseFloat(amount) > 0 && (
                   <ConversionDisplay
                     cryptoAmount={amount}
@@ -470,10 +516,11 @@ export default function SwapPage() {
               </>
             )}
           </Card>
+          )}
 
           <div className="mt-6 text-center space-y-2">
             <p className="text-xs text-muted-foreground">
-              Secure • Fast • Reliable
+              Secure • Fast • Reliable • AI-Powered
             </p>
             <p className="text-xs text-muted-foreground">
               Platform fee: 0.1% • All fees go to app maintenance
