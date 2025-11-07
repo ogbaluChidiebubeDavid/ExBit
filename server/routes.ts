@@ -5,8 +5,72 @@ import { insertTransactionSchema } from "@shared/schema";
 import { z } from "zod";
 import { priceService } from "./services/priceService";
 import { flutterwaveService } from "./services/flutterwaveService";
+import { messengerService } from "./services/messengerService";
+import { commandHandler } from "./services/commandHandler";
 
 export async function registerRoutes(app: Express): Promise<Server> {
+  // Facebook Messenger Webhook - Verification (GET)
+  app.get("/webhook", (req, res) => {
+    const mode = req.query["hub.mode"];
+    const token = req.query["hub.verify_token"];
+    const challenge = req.query["hub.challenge"];
+
+    if (mode === "subscribe" && token) {
+      if (messengerService.verifyWebhookToken(token as string)) {
+        console.log("[Webhook] Webhook verified successfully");
+        res.status(200).send(challenge);
+      } else {
+        console.error("[Webhook] Webhook verification failed - invalid token");
+        res.sendStatus(403);
+      }
+    } else {
+      res.sendStatus(400);
+    }
+  });
+
+  // Facebook Messenger Webhook - Message handling (POST)
+  app.post("/webhook", async (req, res) => {
+    const signature = req.headers["x-hub-signature-256"] as string;
+    
+    // Signature verification is MANDATORY for security
+    if (!signature) {
+      console.error("[Webhook] Missing X-Hub-Signature-256 header");
+      return res.sendStatus(401);
+    }
+
+    // Verify request signature using raw body buffer
+    const rawBody = req.rawBody as Buffer;
+    if (!rawBody) {
+      console.error("[Webhook] Raw body not available for signature verification");
+      return res.sendStatus(500);
+    }
+
+    if (!messengerService.verifyWebhookSignature(signature, rawBody)) {
+      console.error("[Webhook] Invalid signature - rejecting webhook");
+      return res.sendStatus(403);
+    }
+
+    const body = req.body;
+
+    // Handle webhook events
+    if (body.object === "page") {
+      body.entry?.forEach((entry: any) => {
+        entry.messaging?.forEach((event: any) => {
+          if (event.message && event.message.text) {
+            // Process message asynchronously
+            commandHandler.handleMessage(event).catch((error) => {
+              console.error("[Webhook] Error processing message:", error);
+            });
+          }
+        });
+      });
+
+      res.status(200).send("EVENT_RECEIVED");
+    } else {
+      res.sendStatus(404);
+    }
+  });
+
   // Get exchange rates from CoinGecko API
   app.get("/api/rates", async (req, res) => {
     try {
@@ -170,7 +234,7 @@ export async function registerRoutes(app: Express): Promise<Server> {
       }
 
       await storage.updateTransaction(req.params.id, {
-        transactionHash,
+        depositTransactionHash: transactionHash,
         status: "processing",
       });
 
@@ -210,7 +274,7 @@ export async function registerRoutes(app: Express): Promise<Server> {
         console.log(`[Transfer] Transfer successful, reference: ${transferResult.reference}`);
 
         await storage.updateTransaction(req.params.id, {
-          flutterwaveReference: transferResult.reference,
+          quidaxWithdrawalId: transferResult.reference,
           status: "completed",
         });
         
