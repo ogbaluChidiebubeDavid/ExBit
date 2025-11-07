@@ -1,5 +1,6 @@
 import { messengerService } from "./messengerService";
 import { walletService, type ChainKey, SUPPORTED_CHAINS } from "./walletService";
+import { blockchainMonitor } from "./blockchainMonitor";
 import { db } from "../db";
 import { messengerUsers } from "@shared/schema";
 import { eq } from "drizzle-orm";
@@ -210,6 +211,10 @@ class CommandHandler {
         .where(eq(messengerUsers.id, userId));
 
       console.log(`[WalletService] Created wallet for user ${senderId}`);
+
+      // Start monitoring blockchain for deposits
+      await blockchainMonitor.startMonitoring(userId);
+      console.log(`[BlockchainMonitor] Started monitoring deposits for user ${senderId}`);
     } catch (error) {
       console.error("[WalletService] Error generating wallet:", error);
       throw error;
@@ -226,10 +231,37 @@ class CommandHandler {
 
   // Handle /balance command
   private async handleBalanceCommand(senderId: string, user: any): Promise<void> {
-    await messengerService.sendTextMessage(
-      senderId,
-      "The /balance command is coming soon! 🚧\n\nFor now, use /deposit to get your wallet address."
-    );
+    try {
+      // Get deposit balances from blockchain monitor
+      const balances = await blockchainMonitor.getDepositBalance(user.id);
+
+      if (Object.keys(balances).length === 0) {
+        await messengerService.sendTextMessage(
+          senderId,
+          "💰 Your Balance:\n\nNo deposits yet!\n\nType /deposit to get your wallet address and start receiving crypto."
+        );
+        return;
+      }
+
+      // Format balance message
+      let balanceMsg = "💰 Your Confirmed Balances:\n\n";
+      
+      for (const [key, amount] of Object.entries(balances)) {
+        const [blockchain, token] = key.split("-");
+        const chainName = SUPPORTED_CHAINS[blockchain as ChainKey] || blockchain;
+        balanceMsg += `${amount} ${token} (${chainName})\n`;
+      }
+
+      balanceMsg += "\n💡 Type /sell to convert your crypto to Naira!";
+
+      await messengerService.sendTextMessage(senderId, balanceMsg);
+    } catch (error) {
+      console.error("[CommandHandler] Error fetching balance:", error);
+      await messengerService.sendTextMessage(
+        senderId,
+        "Sorry, I couldn't fetch your balance right now. Please try again later."
+      );
+    }
   }
 
   // Handle /help command
