@@ -110,6 +110,24 @@ export const insertBeneficiarySchema = createInsertSchema(beneficiaries).omit({
 export type InsertBeneficiary = z.infer<typeof insertBeneficiarySchema>;
 export type Beneficiary = typeof beneficiaries.$inferSelect;
 
+// Blockchain Monitoring State - Persists last checked block per wallet/chain
+export const monitoringState = pgTable("monitoring_state", {
+  id: varchar("id").primaryKey().default(sql`gen_random_uuid()`),
+  messengerUserId: varchar("messenger_user_id").notNull(),
+  blockchain: text("blockchain").notNull(),
+  walletAddress: text("wallet_address").notNull(),
+  lastCheckedBlock: text("last_checked_block").notNull(),
+  updatedAt: timestamp("updated_at").defaultNow().notNull(),
+});
+
+export const insertMonitoringStateSchema = createInsertSchema(monitoringState).omit({
+  id: true,
+  updatedAt: true,
+});
+
+export type InsertMonitoringState = z.infer<typeof insertMonitoringStateSchema>;
+export type MonitoringState = typeof monitoringState.$inferSelect;
+
 // Legacy users table (keeping for backward compatibility)
 export const users = pgTable("users", {
   id: varchar("id").primaryKey().default(sql`gen_random_uuid()`),

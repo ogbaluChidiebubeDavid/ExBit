@@ -1,6 +1,6 @@
 import { ethers } from "ethers";
 import { db } from "../db";
-import { deposits, messengerUsers } from "@shared/schema";
+import { deposits, messengerUsers, monitoringState } from "@shared/schema";
 import { eq, and } from "drizzle-orm";
 import { messengerService } from "./messengerService";
 
@@ -92,6 +92,7 @@ class BlockchainMonitorService {
 
   constructor() {
     this.initializeProviders();
+    this.resumeMonitoringForExistingUsers();
   }
 
   // Initialize RPC providers for all blockchains
@@ -101,6 +102,72 @@ class BlockchainMonitorService {
       this.providers.set(chain as Blockchain, provider);
       console.log(`[BlockchainMonitor] Initialized provider for ${config.name}`);
     });
+  }
+
+  // Resume monitoring for existing users on service restart
+  private async resumeMonitoringForExistingUsers() {
+    try {
+      // Get all users with wallets
+      const users = await db
+        .select()
+        .from(messengerUsers)
+        .where(eq(messengerUsers.hasCompletedOnboarding, true));
+
+      console.log(`[BlockchainMonitor] Resuming monitoring for ${users.length} existing users`);
+
+      for (const user of users) {
+        if (user.walletAddresses && user.encryptedKeys) {
+          await this.startMonitoring(user.id);
+        }
+      }
+
+      console.log(`[BlockchainMonitor] Resumed monitoring for all existing users`);
+
+      // Resume confirmation tracking for pending deposits
+      await this.resumePendingDepositTracking();
+    } catch (error: any) {
+      console.error(`[BlockchainMonitor] Error resuming monitoring:`, error.message);
+    }
+  }
+
+  // Resume confirmation tracking for deposits that were pending before restart
+  private async resumePendingDepositTracking() {
+    try {
+      // Get all pending deposits
+      const pendingDeposits = await db
+        .select()
+        .from(deposits)
+        .where(eq(deposits.status, "pending"));
+
+      console.log(`[BlockchainMonitor] Resuming confirmation tracking for ${pendingDeposits.length} pending deposits`);
+
+      for (const deposit of pendingDeposits) {
+        // Get the user's messenger ID for notifications
+        const [user] = await db
+          .select()
+          .from(messengerUsers)
+          .where(eq(messengerUsers.id, deposit.messengerUserId))
+          .limit(1);
+
+        if (!user) continue;
+
+        const provider = this.providers.get(deposit.blockchain as Blockchain);
+        if (!provider) continue;
+
+        // Resume tracking confirmations for this deposit
+        this.trackConfirmations(
+          deposit.transactionHash,
+          provider,
+          deposit.blockchain as Blockchain,
+          deposit.messengerUserId,
+          user.messengerId
+        );
+      }
+
+      console.log(`[BlockchainMonitor] Resumed confirmation tracking for all pending deposits`);
+    } catch (error: any) {
+      console.error(`[BlockchainMonitor] Error resuming pending deposit tracking:`, error.message);
+    }
   }
 
   // Start monitoring a specific user's wallet addresses
@@ -179,9 +246,33 @@ class BlockchainMonitorService {
       const config = BLOCKCHAIN_CONFIG[blockchain];
       const currentBlock = await provider.getBlockNumber();
 
-      // Get last checked block for this address
-      const lastBlockKey = `${blockchain}-${address}`;
-      const lastCheckedBlock = this.lastCheckedBlocks.get(lastBlockKey) || currentBlock - 100;
+      // Get last checked block from database (persistent storage)
+      const [stateRecord] = await db
+        .select()
+        .from(monitoringState)
+        .where(
+          and(
+            eq(monitoringState.messengerUserId, messengerUserId),
+            eq(monitoringState.blockchain, blockchain),
+            eq(monitoringState.walletAddress, address)
+          )
+        )
+        .limit(1);
+
+      let lastCheckedBlock = stateRecord
+        ? parseInt(stateRecord.lastCheckedBlock)
+        : Math.max(0, currentBlock - 100); // Only use 100-block lookback for brand new wallets
+
+      // Limit block range to prevent performance issues (max 50 blocks per check)
+      // Process in chunks to catch up if there's a backlog
+      const maxBlocksPerCheck = 50;
+      const fromBlock = lastCheckedBlock;
+      const toBlock = Math.min(currentBlock, lastCheckedBlock + maxBlocksPerCheck);
+
+      // Skip if no new blocks to check
+      if (fromBlock >= toBlock) {
+        return;
+      }
 
       // Check native token transfers (ETH, BNB, MATIC, etc.)
       await this.checkNativeTransfers(
@@ -190,8 +281,8 @@ class BlockchainMonitorService {
         messengerId,
         blockchain,
         address,
-        lastCheckedBlock,
-        currentBlock
+        fromBlock,
+        toBlock
       );
 
       // Check ERC-20 token transfers (USDT, USDC, etc.)
@@ -206,13 +297,32 @@ class BlockchainMonitorService {
           address,
           symbol,
           contractAddress,
-          lastCheckedBlock,
-          currentBlock
+          fromBlock,
+          toBlock
         );
       }
 
-      // Update last checked block
-      this.lastCheckedBlocks.set(lastBlockKey, currentBlock);
+      // Update last checked block in memory (for quick access)
+      const lastBlockKey = `${blockchain}-${address}`;
+      this.lastCheckedBlocks.set(lastBlockKey, toBlock);
+
+      // Persist to database (so restarts don't lose state)
+      if (stateRecord) {
+        await db
+          .update(monitoringState)
+          .set({
+            lastCheckedBlock: toBlock.toString(),
+            updatedAt: new Date(),
+          })
+          .where(eq(monitoringState.id, stateRecord.id));
+      } else {
+        await db.insert(monitoringState).values({
+          messengerUserId,
+          blockchain,
+          walletAddress: address,
+          lastCheckedBlock: toBlock.toString(),
+        });
+      }
     } catch (error: any) {
       console.error(
         `[BlockchainMonitor] Error checking deposits for ${blockchain}:`,
@@ -232,18 +342,93 @@ class BlockchainMonitorService {
     toBlock: number
   ) {
     try {
-      // Get transaction history for the address
-      const history = await provider.send("eth_getLogs", [
-        {
-          fromBlock: ethers.toQuantity(fromBlock),
-          toBlock: ethers.toQuantity(toBlock),
-          address: null,
-          topics: null,
-        },
-      ]);
+      // Check each block for transactions to our address
+      for (let blockNum = fromBlock + 1; blockNum <= toBlock; blockNum++) {
+        try {
+          const block = await provider.getBlock(blockNum, true);
+          if (!block || !block.prefetchedTransactions) continue;
 
-      // Note: This is simplified. In production, you'd use a block explorer API
-      // or index transactions more efficiently
+          // Check each transaction in the block
+          for (const tx of block.prefetchedTransactions) {
+            // Check if transaction is to our user's address
+            if (tx.to?.toLowerCase() !== address.toLowerCase()) continue;
+
+            // Check if transaction has value (native token transfer)
+            if (!tx.value || tx.value === 0n) continue;
+
+            const txHash = tx.hash;
+
+            // Check if we've already recorded this deposit
+            const [existingDeposit] = await db
+              .select()
+              .from(deposits)
+              .where(eq(deposits.transactionHash, txHash))
+              .limit(1);
+
+            if (existingDeposit) {
+              // Update confirmation count if pending
+              if (existingDeposit.status === "pending") {
+                await this.updateDepositConfirmations(
+                  existingDeposit.id,
+                  txHash,
+                  provider,
+                  blockchain
+                );
+              }
+              continue;
+            }
+
+            // New native token deposit detected!
+            const amount = ethers.formatEther(tx.value);
+            const fromAddress = tx.from;
+            const config = BLOCKCHAIN_CONFIG[blockchain];
+            
+            // Get the native token symbol
+            const nativeToken = Object.keys(config.tokens).find(
+              k => config.tokens[k as keyof typeof config.tokens] === "native"
+            ) || "ETH";
+
+            // Save deposit to database
+            await db.insert(deposits).values({
+              messengerUserId,
+              blockchain,
+              token: nativeToken,
+              amount,
+              toAddress: address,
+              fromAddress,
+              transactionHash: txHash,
+              blockNumber: blockNum.toString(),
+              confirmations: "0",
+              status: "pending",
+            });
+
+            console.log(`[BlockchainMonitor] New native deposit detected:`, {
+              blockchain,
+              token: nativeToken,
+              amount,
+              txHash,
+            });
+
+            // Notify user via Messenger
+            await this.notifyUserOfDeposit(messengerId, {
+              blockchain,
+              token: nativeToken,
+              amount,
+              transactionHash: txHash,
+              confirmations: 0,
+            });
+
+            // Start tracking confirmations
+            this.trackConfirmations(txHash, provider, blockchain, messengerUserId, messengerId);
+          }
+        } catch (blockError: any) {
+          console.error(
+            `[BlockchainMonitor] Error processing block ${blockNum}:`,
+            blockError.message
+          );
+          continue;
+        }
+      }
     } catch (error: any) {
       console.error(`[BlockchainMonitor] Error checking native transfers:`, error.message);
     }
