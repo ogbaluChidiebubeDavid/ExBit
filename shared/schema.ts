@@ -20,6 +20,8 @@ export const messengerUsers = pgTable("messenger_users", {
   securityAnswer: text("security_answer"),
   // Onboarding status
   hasCompletedOnboarding: boolean("has_completed_onboarding").default(false).notNull(),
+  onboardingStep: text("onboarding_step"),
+  tempPinSetup: text("temp_pin_setup"),
   createdAt: timestamp("created_at").defaultNow().notNull(),
 });
 

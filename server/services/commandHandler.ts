@@ -1,6 +1,7 @@
 import { messengerService } from "./messengerService";
 import { walletService, type ChainKey, SUPPORTED_CHAINS } from "./walletService";
 import { blockchainMonitor } from "./blockchainMonitor";
+import { pinService } from "./pinService";
 import { db } from "../db";
 import { messengerUsers } from "@shared/schema";
 import { eq } from "drizzle-orm";
@@ -68,28 +69,153 @@ class CommandHandler {
         firstName: profile.first_name,
         lastName: profile.last_name,
         hasCompletedOnboarding: false,
+        onboardingStep: "ASK_PIN",
       });
 
       await messengerService.sendTextMessage(
         senderId,
-        `Welcome to ExBit! 👋\n\nI'm your crypto exchange assistant. I'll help you convert cryptocurrency to Naira and send it directly to your bank account.\n\nNo MetaMask needed - I'll create a secure wallet for you!`
+        `Welcome to ExBit, ${profile.first_name}! 👋\n\nI'm your crypto exchange assistant. I'll help you convert cryptocurrency to Naira and send it directly to your Nigerian bank account.\n\nNo MetaMask needed - I'll create a secure wallet for you!`
       );
 
-      await new Promise(resolve => setTimeout(resolve, 1000));
+      await new Promise(resolve => setTimeout(resolve, 1500));
 
       await messengerService.sendTextMessage(
         senderId,
-        `📱 Available Commands:\n\n/deposit - Get your wallet address to receive crypto\n/sell - Convert crypto to Naira\n/balance - Check your crypto balance\n/help - Show this help message\n\nLet's get started! Type /deposit to see your wallet address.`
+        `🔐 To keep your funds secure, let's set up a 4-digit transaction PIN.\n\nYou'll need this PIN every time you sell crypto or send money to your bank.\n\nPlease enter a 4-digit PIN (e.g., 1234):`
       );
 
       return;
     }
 
-    // Continue onboarding flow
+    // Continue onboarding flow based on current step
+    const currentStep = user.onboardingStep;
+
+    switch (currentStep) {
+      case "ASK_PIN":
+        await this.handlePINSetup(senderId, user, message);
+        break;
+
+      case "ASK_SECURITY_QUESTION":
+        await this.handleSecurityQuestionSetup(senderId, user, message);
+        break;
+
+      case "ASK_SECURITY_ANSWER":
+        await this.handleSecurityAnswerSetup(senderId, user, message);
+        break;
+
+      default:
+        await messengerService.sendTextMessage(
+          senderId,
+          "Welcome back! Type /help to see available commands."
+        );
+    }
+  }
+
+  // Handle PIN setup during onboarding
+  private async handlePINSetup(senderId: string, user: any, pin: string): Promise<void> {
+    if (!pinService.isValidPIN(pin)) {
+      await messengerService.sendTextMessage(
+        senderId,
+        `❌ Invalid PIN. Please enter exactly 4 digits (e.g., 1234):`
+      );
+      return;
+    }
+
+    await db
+      .update(messengerUsers)
+      .set({
+        tempPinSetup: pin,
+        onboardingStep: "ASK_SECURITY_QUESTION",
+      })
+      .where(eq(messengerUsers.id, user.id));
+
     await messengerService.sendTextMessage(
       senderId,
-      "Welcome back! Type /help to see available commands."
+      `✅ PIN saved!\n\n🔑 Now, let's set up a security question for PIN recovery.\n\nIf you forget your PIN, you'll answer this question to reset it.\n\nExample questions:\n- What city were you born in?\n- What is your mother's maiden name?\n- What was your first pet's name?\n\nPlease enter your security question:`
     );
+  }
+
+  // Handle security question setup
+  private async handleSecurityQuestionSetup(
+    senderId: string,
+    user: any,
+    question: string
+  ): Promise<void> {
+    if (!pinService.isValidSecurityQuestion(question)) {
+      await messengerService.sendTextMessage(
+        senderId,
+        `❌ Security question must be between 10 and 200 characters.\n\nPlease try again:`
+      );
+      return;
+    }
+
+    await db
+      .update(messengerUsers)
+      .set({
+        securityQuestion: question,
+        onboardingStep: "ASK_SECURITY_ANSWER",
+      })
+      .where(eq(messengerUsers.id, user.id));
+
+    await messengerService.sendTextMessage(
+      senderId,
+      `✅ Security question saved!\n\n🔐 Now, please provide the answer to your security question:\n\n"${question}"\n\nYour answer:`
+    );
+  }
+
+  // Handle security answer setup and complete onboarding
+  private async handleSecurityAnswerSetup(
+    senderId: string,
+    user: any,
+    answer: string
+  ): Promise<void> {
+    if (!pinService.isValidSecurityAnswer(answer)) {
+      await messengerService.sendTextMessage(
+        senderId,
+        `❌ Answer must be between 2 and 100 characters.\n\nPlease try again:`
+      );
+      return;
+    }
+
+    try {
+      await messengerService.sendTextMessage(
+        senderId,
+        `⏳ Setting up your secure wallet and PIN...`
+      );
+
+      const hashedPIN = await pinService.hashPIN(user.tempPinSetup);
+      const hashedAnswer = await pinService.hashSecurityAnswer(answer);
+      
+      const walletData = await walletService.createWallet();
+
+      await db
+        .update(messengerUsers)
+        .set({
+          transactionPin: hashedPIN,
+          securityAnswer: hashedAnswer,
+          walletAddresses: walletData.addresses,
+          encryptedKeys: walletData.encryptedKeys,
+          hasCompletedOnboarding: true,
+          onboardingStep: null,
+          tempPinSetup: null,
+        })
+        .where(eq(messengerUsers.id, user.id));
+
+      await blockchainMonitor.startMonitoring(user.id);
+
+      await new Promise(resolve => setTimeout(resolve, 1500));
+
+      await messengerService.sendTextMessage(
+        senderId,
+        `✅ All set! Your wallet is ready!\n\n📱 Available Commands:\n\n/deposit - Get wallet address to receive crypto\n/sell - Convert crypto to Naira\n/balance - Check your crypto balance\n/help - Show this help message\n\nType /deposit to see your wallet address and start receiving crypto!`
+      );
+    } catch (error) {
+      console.error("[CommandHandler] Error completing onboarding:", error);
+      await messengerService.sendTextMessage(
+        senderId,
+        "❌ Sorry, there was an error setting up your wallet. Please try again later."
+      );
+    }
   }
 
   // Handle commands for existing users
