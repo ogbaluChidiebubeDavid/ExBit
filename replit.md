@@ -1,70 +1,141 @@
-# ExBit - Crypto to Naira Exchange Platform
+# ExBit - Facebook Messenger Crypto Exchange Bot
 
 ## Overview
-ExBit is a full-stack web application enabling users to exchange cryptocurrency tokens for Nigerian Naira, with direct bank transfers. It supports multiple blockchain networks (Ethereum, BSC, Polygon, Arbitrum, Base) and features real-time crypto transfers, exchange rates, and bank account validation. The platform aims to provide a seamless, secure, and efficient crypto-to-fiat off-ramp solution for the Nigerian market, inspired by a minimal design aesthetic.
+ExBit is a Facebook Messenger bot that enables non-crypto-savvy Nigerians to exchange cryptocurrency for Naira through simple conversational commands. Built with a custodial wallet model (inspired by Azza/WhatsApp bot), users interact entirely within Messenger—no MetaMask, no browser extensions, no crypto knowledge required. The bot supports multiple blockchains (Ethereum, BSC, Polygon, Arbitrum, Base) and provides seamless crypto-to-Naira conversion with direct bank transfers. Platform targets the 95% of Facebook users in Nigeria who are unfamiliar with crypto, making digital currency accessible through familiar messaging interfaces.
 
 ## User Preferences
 I prefer simple language and direct instructions. I want iterative development with clear explanations for each step. Please ask for confirmation before making any major changes to the codebase or architectural decisions. Focus on delivering production-ready features.
 
 ## System Architecture
 
-### Frontend
-- **Framework**: React with Vite
-- **Web3 Integration**: Ethers.js v6 for blockchain interactions (wallet connection, transactions, network switching)
-- **Routing**: Wouter
-- **State Management**: TanStack Query (React Query)
-- **Styling**: Tailwind CSS with Shadcn UI for component library
-- **Form Handling**: Zod for schema validation with React Hook Form
-- **UI/UX**: Minimalist design inspired by relay.link, dark/light mode toggle, responsive for mobile and desktop, uses Inter and JetBrains Mono fonts, semantic color tokens, and elevation for interactive elements.
+### Messenger Bot Interface
+- **Platform**: Facebook Messenger Platform API (Webhooks)
+- **User Experience**: Conversational AI with command-based interactions
+- **Commands**: /deposit, /sell, /balance, /help (Azza-style)
+- **Security**: Transaction PINs, security questions, Messenger webviews for sensitive data
+- **No Wallet Required**: ExBit creates and manages custodial wallets for users
 
-### Backend
+### Backend Infrastructure
 - **Server**: Express.js with TypeScript
-- **Database**: PostgreSQL (Neon) using Drizzle ORM for persistent storage of transaction history.
-- **Validation**: Zod schemas for API data integrity.
-- **Core Functionality**:
-    - Real-time exchange rate fetching.
-    - Nigerian bank account validation.
-    - Automatic Naira transfers.
-    - Transaction management and status tracking.
-    - Platform fee collection (0.1% per swap).
+- **Messenger Webhooks**: Real-time message handling and automated responses
+- **Database**: PostgreSQL (Neon) using Drizzle ORM
+- **Blockchain Integration**: Ethers.js v6 for wallet generation and transaction monitoring
+- **Custodial Wallets**: Server-side wallet management for all users (encrypted private keys)
+- **Core Services**:
+    - Command parser (natural language + slash commands)
+    - Deposit monitoring (detects incoming crypto)
+    - Quidax integration (sell crypto, bank transfers)
+    - Transaction PIN verification
+    - Bank account validation
 
 ### Data Model
-- **Transaction**: Stores comprehensive details including blockchain, token, amounts (crypto, Naira, fee), exchange rate, bank details, user wallet, transaction hashes (blockchain & Flutterwave), status, and timestamps.
+- **Users**: Messenger ID, custodial wallet addresses (per chain), encrypted private keys, transaction PIN (hashed), security question
+- **Transactions**: User, blockchain, token, crypto amount, Naira amount, fee, bank details, Quidax trade ID, status, timestamps
+- **Deposits**: Incoming crypto transactions, confirmation status
+- **Beneficiaries**: Saved Nigerian bank accounts for faster future transfers
 
 ### Key Features
-- Web3 wallet connection (MetaMask & compatible wallets) with automatic network switching.
-- Multi-blockchain support (Ethereum, BSC, Polygon, Arbitrum, Base).
-- Real cryptocurrency token transfers.
-- Real-time transaction status updates.
-- 0.1% platform fee collection to owner's wallet.
+- ✅ **Custodial Wallets**: ExBit generates wallets for users (no MetaMask needed)
+- ✅ **Multi-blockchain Support**: Ethereum, BSC, Polygon, Arbitrum, Base
+- ✅ **Conversational Interface**: Simple commands in Messenger
+- ✅ **Transaction PINs**: 4-digit security for all swaps
+- ✅ **Messenger Webviews**: Secure data entry (bank details, PINs) - no sensitive info in chat history
+- ✅ **Real-time Notifications**: Bot messages when deposits arrive or transfers complete
+- ✅ **0.1% Platform Fee**: $0.10 per transaction (₦143 at current rates)
 
 ## External Dependencies
 
+- **Facebook Messenger Platform API**:
+    - **Purpose**: Webhook-based message handling, sending bot responses, Messenger webviews
+    - **Requirements**: Facebook Developer account, Facebook Page, Page Access Token
+    - **No IP Restrictions**: Works on any hosting platform (Replit, Oracle Cloud, etc.)
+    - **Documentation**: https://developers.facebook.com/docs/messenger-platform
+
+- **Quidax API** (Primary Exchange):
+    - **Purpose**: Crypto-to-Naira conversion, Nigerian bank transfers
+    - **Why Quidax**: ✅ No IP whitelisting (solves Flutterwave problem!), SEC-licensed, no prefunding required
+    - **Requirements**: `QUIDAX_SECRET_KEY`, Quidax personal account (can upgrade to business later)
+    - **Flow**: User sends crypto → ExBit deposits to Quidax → Sell crypto for Naira → Withdraw to user's bank
+    - **Fees**: Receiving crypto (FREE), Selling (~0.1-0.2%), Withdrawals (minimal)
+    - **Documentation**: https://docs.quidax.io
+
 - **CoinGecko Public API**:
-    - **Purpose**: Real-time cryptocurrency prices for supported tokens (ETH, BNB, MATIC, USDT, USDC, DAI, BUSD) with direct NGN pricing.
-    - **Integration**: `GET /api/rates` endpoint.
-- **Flutterwave API**:
-    - **Purpose**: Nigerian bank account validation (Account Resolution API) and automatic Naira transfers (Transfers API).
-    - **Requirements**: `FLUTTERWAVE_SECRET_KEY`, Flutterwave account with sufficient balance, and whitelisting of deployment server's static outbound IP.
-    - **Minimum Transfer**: ₦100.
-    - **IP Whitelisting Issue**: Replit Reserved VMs use dynamic outbound IPs that change unpredictably, causing transfer failures. **Solution**: Migrate to Oracle Cloud for free static IP (see ORACLE_CLOUD_MIGRATION.md).
-- **Web3 Wallets**:
-    - **Integration**: MetaMask, WalletConnect, Coinbase Wallet, etc., for user authentication, transaction signing, and blockchain interactions.
+    - **Purpose**: Real-time cryptocurrency prices for display in bot messages
+    - **Integration**: Shows users conversion rates before swaps
+    - **Optional**: Could use Quidax market data instead
+
+- **Blockchain RPC Providers**:
+    - **Purpose**: Monitor incoming deposits to user wallets
+    - **Providers**: Infura, Alchemy, or public RPC endpoints
+    - **Chains**: Ethereum, BSC, Polygon, Arbitrum, Base
+
 - **PostgreSQL (Neon)**:
-    - **Purpose**: Cloud-hosted relational database for storing all transaction records and application data.
+    - **Purpose**: Store users, wallets, transactions, PINs (hashed), bank accounts
 
 ## Deployment Options
 
-### Current: Replit Reserved VM
-- **Status**: ❌ Unstable due to dynamic outbound IPs
-- **Issue**: Flutterwave requires static IP whitelisting for transfers
-- **Cost**: $20/month
-- **Recommendation**: Migrate to Oracle Cloud
+### Current: Replit (WORKS NOW! ✅)
+- **Status**: ✅ Fully functional with Quidax (no IP restrictions!)
+- **Cost**: FREE (can upgrade to Reserved VM if needed)
+- **Advantages**: Instant deployment, integrated secrets management, PostgreSQL database included
+- **Perfect for**: Development, testing, early launch
 
-### Recommended: Oracle Cloud Infrastructure (OCI)
-- **Status**: ✅ Stable static IP, free forever
+### Alternative: Oracle Cloud Infrastructure (OCI)
+- **Status**: Available if scaling requires it
 - **Resources**: 2 AMD VMs or 4 ARM cores + 24GB RAM
-- **Bandwidth**: Unlimited (huge advantage)
+- **Bandwidth**: Unlimited
 - **Cost**: $0/month (Always Free Tier)
+- **When to migrate**: If Replit limits become constraint or need more control
 - **Setup Guide**: See `ORACLE_CLOUD_MIGRATION.md` for complete migration instructions
-- **Deployment Script**: Use `deploy-to-oracle.sh` for automated setup
+
+## User Flow (Azza-Style)
+
+1. **User finds @ExBitBot on Messenger**
+2. **Bot**: "Welcome! Want to create a wallet?"
+3. **User**: "Yes"
+4. **Bot**: "Set a 4-digit PIN" → [Opens secure webview]
+5. **User**: Creates PIN (1234) + security question
+6. **Bot**: "Wallet created! Commands: /deposit, /sell, /balance"
+7. **User**: "/deposit"
+8. **Bot**: "Which chain? [Buttons: ETH, BSC, Polygon, ARB, Base]"
+9. **User**: Clicks "BSC"
+10. **Bot**: "Send USDT/BNB to: 0xABC123... [Copy button]"
+11. **User**: Sends 100 USDT from Trust Wallet
+12. **Bot**: "✅ Received 100 USDT! Balance: 100 USDT. Type /sell to convert"
+13. **User**: "/sell 100 USDT"
+14. **Bot**: "Rate: ₦1,436/USDT = ₦143,647. Fee: ₦143. You get: ₦143,503" → [Enter Bank Details]
+15. **User**: Clicks secure form → enters bank account
+16. **Bot**: "Confirm: ₦143,503 to Access Bank •••6789? Enter PIN:"
+17. **User**: Enters PIN (1234)
+18. **Bot**: "✅ Processing... [30 sec] ✅ Sent! TX: FLW-12345"
+
+## Business Model
+
+- **Fee Structure**: 0.1% per swap ($0.10 or ₦143 per transaction)
+- **Revenue Example**: 100 users/day × $100 avg = $10/day = $300/month
+- **No Prefunding**: Users send crypto first, zero capital required
+- **Scalability**: Fees scale with volume
+- **Target Market**: 95% of Nigerian Facebook users (non-crypto-savvy)
+
+## Next Steps
+
+### Development Phase (Weeks 1-4)
+- ✅ Set up Quidax API key
+- ⏳ Build Messenger webhook
+- ⏳ Create custodial wallet system
+- ⏳ Implement command parser
+- ⏳ Integrate Quidax sell/withdraw
+- ⏳ Add PIN security
+- ⏳ Build Messenger webviews
+
+### Testing Phase (Weeks 5-8)
+- Test with friends/family
+- Process small real transactions
+- Refine UX based on feedback
+- Keep private (no public ads)
+
+### Launch Phase (Week 9+)
+- Email Quidax for business approval
+- Consider registering CAC (business)
+- Public launch on Facebook
+- Marketing to Nigerian crypto communities
