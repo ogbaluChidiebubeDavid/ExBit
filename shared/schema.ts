@@ -28,6 +28,13 @@ export const messengerUsers = pgTable("messenger_users", {
   // PIN reset state
   pinResetState: text("pin_reset_state"),
   tempHashedNewPin: text("temp_hashed_new_pin"),
+  // Pending bank details (from webview, expires after 30 min)
+  pendingBankDetails: json("pending_bank_details").$type<{
+    bankName: string;
+    accountNumber: string;
+    accountName: string;
+    timestamp: number;
+  }>(),
   createdAt: timestamp("created_at").defaultNow().notNull(),
 });
 

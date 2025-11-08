@@ -71,6 +71,626 @@ export async function registerRoutes(app: Express): Promise<Server> {
     }
   });
 
+  // Messenger Webview - PIN Entry
+  app.get("/webview/pin-entry", (req, res) => {
+    const html = `
+      <!DOCTYPE html>
+      <html>
+        <head>
+          <meta charset="UTF-8">
+          <meta name="viewport" content="width=device-width, initial-scale=1.0">
+          <title>Set Your PIN</title>
+          <style>
+            * { box-sizing: border-box; margin: 0; padding: 0; }
+            body {
+              font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, sans-serif;
+              background: linear-gradient(135deg, #667eea 0%, #764ba2 100%);
+              min-height: 100vh;
+              display: flex;
+              align-items: center;
+              justify-content: center;
+              padding: 20px;
+            }
+            .container {
+              background: white;
+              border-radius: 16px;
+              padding: 32px 24px;
+              max-width: 400px;
+              width: 100%;
+              box-shadow: 0 20px 60px rgba(0,0,0,0.2);
+            }
+            h1 {
+              font-size: 24px;
+              color: #1a1a1a;
+              margin-bottom: 8px;
+              text-align: center;
+            }
+            .subtitle {
+              font-size: 14px;
+              color: #666;
+              text-align: center;
+              margin-bottom: 32px;
+            }
+            .form-group {
+              margin-bottom: 24px;
+            }
+            label {
+              display: block;
+              font-size: 14px;
+              font-weight: 600;
+              color: #333;
+              margin-bottom: 8px;
+            }
+            input, select {
+              width: 100%;
+              padding: 12px 16px;
+              border: 2px solid #e0e0e0;
+              border-radius: 8px;
+              font-size: 16px;
+              transition: border-color 0.3s;
+            }
+            input:focus, select:focus {
+              outline: none;
+              border-color: #667eea;
+            }
+            input[type="password"] {
+              letter-spacing: 4px;
+              font-size: 20px;
+            }
+            .btn {
+              width: 100%;
+              padding: 14px;
+              background: linear-gradient(135deg, #667eea 0%, #764ba2 100%);
+              color: white;
+              border: none;
+              border-radius: 8px;
+              font-size: 16px;
+              font-weight: 600;
+              cursor: pointer;
+              transition: transform 0.2s;
+            }
+            .btn:hover { transform: translateY(-2px); }
+            .btn:disabled {
+              background: #ccc;
+              cursor: not-allowed;
+              transform: none;
+            }
+            .error {
+              color: #e53e3e;
+              font-size: 14px;
+              margin-top: 8px;
+              display: none;
+            }
+            .success {
+              color: #38a169;
+              font-size: 14px;
+              margin-top: 8px;
+              display: none;
+            }
+            .security-note {
+              background: #f7fafc;
+              border-left: 4px solid #667eea;
+              padding: 12px;
+              margin-top: 24px;
+              font-size: 13px;
+              color: #555;
+              border-radius: 4px;
+            }
+          </style>
+        </head>
+        <body>
+          <div class="container">
+            <h1>🔐 Set Your Transaction PIN</h1>
+            <p class="subtitle">Create a 4-digit PIN to secure your transactions</p>
+            
+            <form id="pinForm">
+              <div class="form-group">
+                <label for="pin">Enter 4-Digit PIN</label>
+                <input type="password" id="pin" name="pin" maxlength="4" pattern="[0-9]{4}" inputmode="numeric" required placeholder="••••">
+              </div>
+              
+              <div class="form-group">
+                <label for="confirmPin">Confirm PIN</label>
+                <input type="password" id="confirmPin" name="confirmPin" maxlength="4" pattern="[0-9]{4}" inputmode="numeric" required placeholder="••••">
+              </div>
+              
+              <div class="form-group">
+                <label for="securityQuestion">Security Question</label>
+                <select id="securityQuestion" name="securityQuestion" required>
+                  <option value="">Choose a question...</option>
+                  <option value="mother">What is your mother's maiden name?</option>
+                  <option value="pet">What was the name of your first pet?</option>
+                  <option value="city">In what city were you born?</option>
+                  <option value="school">What is the name of your first school?</option>
+                </select>
+              </div>
+              
+              <div class="form-group">
+                <label for="securityAnswer">Answer</label>
+                <input type="text" id="securityAnswer" name="securityAnswer" required placeholder="Your answer">
+              </div>
+              
+              <button type="submit" class="btn" id="submitBtn">Set PIN</button>
+              
+              <div class="error" id="errorMsg"></div>
+              <div class="success" id="successMsg"></div>
+            </form>
+            
+            <div class="security-note">
+              <strong>🛡️ Security Tips:</strong><br>
+              • Never share your PIN with anyone<br>
+              • Choose a unique PIN (not 1234 or 0000)<br>
+              • Remember your security answer
+            </div>
+          </div>
+          
+          <script>
+            (function(d, s, id){
+              var js, fjs = d.getElementsByTagName(s)[0];
+              if (d.getElementById(id)) { return; }
+              js = d.createElement(s); js.id = id;
+              js.src = "//connect.facebook.net/en_US/messenger.Extensions.js";
+              fjs.parentNode.insertBefore(js, fjs);
+            }(document, 'script', 'Messenger'));
+            
+            window.extAsyncInit = function() {
+              MessengerExtensions.getUserID(function success(uids) {
+                var psid = uids.psid;
+                document.getElementById('pinForm').addEventListener('submit', handleSubmit);
+                
+                function handleSubmit(e) {
+                  e.preventDefault();
+                  const pin = document.getElementById('pin').value;
+                  const confirmPin = document.getElementById('confirmPin').value;
+                  const securityQuestion = document.getElementById('securityQuestion').value;
+                  const securityAnswer = document.getElementById('securityAnswer').value;
+                  const errorMsg = document.getElementById('errorMsg');
+                  const successMsg = document.getElementById('successMsg');
+                  const submitBtn = document.getElementById('submitBtn');
+                  
+                  errorMsg.style.display = 'none';
+                  successMsg.style.display = 'none';
+                  
+                  if (!/^[0-9]{4}$/.test(pin)) {
+                    errorMsg.textContent = 'PIN must be exactly 4 digits';
+                    errorMsg.style.display = 'block';
+                    return;
+                  }
+                  
+                  if (pin !== confirmPin) {
+                    errorMsg.textContent = 'PINs do not match';
+                    errorMsg.style.display = 'block';
+                    return;
+                  }
+                  
+                  if (!securityQuestion || !securityAnswer.trim()) {
+                    errorMsg.textContent = 'Please complete security question';
+                    errorMsg.style.display = 'block';
+                    return;
+                  }
+                  
+                  submitBtn.disabled = true;
+                  submitBtn.textContent = 'Setting PIN...';
+                  
+                  fetch('/api/webview/set-pin', {
+                    method: 'POST',
+                    headers: { 'Content-Type': 'application/json' },
+                    body: JSON.stringify({ psid, pin, securityQuestion, securityAnswer })
+                  })
+                  .then(res => res.json())
+                  .then(data => {
+                    if (data.success) {
+                      successMsg.textContent = '✅ PIN set successfully!';
+                      successMsg.style.display = 'block';
+                      setTimeout(() => MessengerExtensions.requestCloseBrowser(), 1500);
+                    } else {
+                      throw new Error(data.error || 'Failed to set PIN');
+                    }
+                  })
+                  .catch(err => {
+                    errorMsg.textContent = err.message;
+                    errorMsg.style.display = 'block';
+                    submitBtn.disabled = false;
+                    submitBtn.textContent = 'Set PIN';
+                  });
+                }
+              }, function error(err, errorMessage) {
+                console.error('Messenger Extensions error:', err, errorMessage);
+              });
+            };
+          </script>
+        </body>
+      </html>
+    `;
+    res.send(html);
+  });
+
+  // Messenger Webview - Bank Details Entry
+  app.get("/webview/bank-details", (req, res) => {
+    const amount = req.query.amount || "0";
+    const token = req.query.token || "";
+    
+    const html = `
+      <!DOCTYPE html>
+      <html>
+        <head>
+          <meta charset="UTF-8">
+          <meta name="viewport" content="width=device-width, initial-scale=1.0">
+          <title>Enter Bank Details</title>
+          <style>
+            * { box-sizing: border-box; margin: 0; padding: 0; }
+            body {
+              font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, sans-serif;
+              background: linear-gradient(135deg, #667eea 0%, #764ba2 100%);
+              min-height: 100vh;
+              display: flex;
+              align-items: center;
+              justify-content: center;
+              padding: 20px;
+            }
+            .container {
+              background: white;
+              border-radius: 16px;
+              padding: 32px 24px;
+              max-width: 400px;
+              width: 100%;
+              box-shadow: 0 20px 60px rgba(0,0,0,0.2);
+            }
+            h1 {
+              font-size: 24px;
+              color: #1a1a1a;
+              margin-bottom: 8px;
+              text-align: center;
+            }
+            .amount-display {
+              background: linear-gradient(135deg, #667eea 0%, #764ba2 100%);
+              color: white;
+              padding: 16px;
+              border-radius: 12px;
+              text-align: center;
+              margin: 16px 0 24px;
+            }
+            .amount-display .label {
+              font-size: 12px;
+              opacity: 0.9;
+              margin-bottom: 4px;
+            }
+            .amount-display .value {
+              font-size: 28px;
+              font-weight: 700;
+            }
+            .form-group {
+              margin-bottom: 20px;
+            }
+            label {
+              display: block;
+              font-size: 14px;
+              font-weight: 600;
+              color: #333;
+              margin-bottom: 8px;
+            }
+            input, select {
+              width: 100%;
+              padding: 12px 16px;
+              border: 2px solid #e0e0e0;
+              border-radius: 8px;
+              font-size: 16px;
+              transition: border-color 0.3s;
+            }
+            input:focus, select:focus {
+              outline: none;
+              border-color: #667eea;
+            }
+            .btn {
+              width: 100%;
+              padding: 14px;
+              background: linear-gradient(135deg, #667eea 0%, #764ba2 100%);
+              color: white;
+              border: none;
+              border-radius: 8px;
+              font-size: 16px;
+              font-weight: 600;
+              cursor: pointer;
+              transition: transform 0.2s;
+            }
+            .btn:hover { transform: translateY(-2px); }
+            .btn:disabled {
+              background: #ccc;
+              cursor: not-allowed;
+              transform: none;
+            }
+            .account-name {
+              background: #f0fff4;
+              border: 2px solid #48bb78;
+              padding: 12px;
+              border-radius: 8px;
+              margin-top: 8px;
+              font-size: 14px;
+              color: #2f855a;
+              display: none;
+            }
+            .error {
+              color: #e53e3e;
+              font-size: 14px;
+              margin-top: 8px;
+              display: none;
+            }
+            .success {
+              color: #38a169;
+              font-size: 14px;
+              margin-top: 8px;
+              display: none;
+            }
+            .loading {
+              display: none;
+              text-align: center;
+              color: #667eea;
+              margin-top: 8px;
+              font-size: 14px;
+            }
+          </style>
+        </head>
+        <body>
+          <div class="container">
+            <h1>💳 Enter Bank Details</h1>
+            
+            <div class="amount-display">
+              <div class="label">You will receive</div>
+              <div class="value">₦${amount}</div>
+            </div>
+            
+            <form id="bankForm">
+              <div class="form-group">
+                <label for="bankName">Bank Name</label>
+                <select id="bankName" name="bankName" required>
+                  <option value="">Select your bank...</option>
+                  <option value="Access Bank">Access Bank</option>
+                  <option value="Zenith Bank">Zenith Bank</option>
+                  <option value="GTBank">GTBank</option>
+                  <option value="First Bank">First Bank</option>
+                  <option value="UBA">UBA</option>
+                  <option value="Fidelity Bank">Fidelity Bank</option>
+                  <option value="Union Bank">Union Bank</option>
+                  <option value="Stanbic IBTC">Stanbic IBTC</option>
+                  <option value="Sterling Bank">Sterling Bank</option>
+                  <option value="Wema Bank">Wema Bank</option>
+                  <option value="Ecobank">Ecobank</option>
+                  <option value="FCMB">FCMB</option>
+                  <option value="Kuda Bank">Kuda Bank</option>
+                  <option value="OPay">OPay</option>
+                  <option value="PalmPay">PalmPay</option>
+                </select>
+              </div>
+              
+              <div class="form-group">
+                <label for="accountNumber">Account Number</label>
+                <input type="text" id="accountNumber" name="accountNumber" maxlength="10" pattern="[0-9]{10}" inputmode="numeric" required placeholder="10-digit account number">
+                <div class="loading" id="validating">Validating account...</div>
+                <div class="account-name" id="accountNameDisplay"></div>
+                <div class="error" id="accountError"></div>
+              </div>
+              
+              <button type="submit" class="btn" id="submitBtn" disabled>Continue</button>
+              
+              <div class="error" id="errorMsg"></div>
+              <div class="success" id="successMsg"></div>
+            </form>
+          </div>
+          
+          <script>
+            (function(d, s, id){
+              var js, fjs = d.getElementsByTagName(s)[0];
+              if (d.getElementById(id)) { return; }
+              js = d.createElement(s); js.id = id;
+              js.src = "//connect.facebook.net/en_US/messenger.Extensions.js";
+              fjs.parentNode.insertBefore(js, fjs);
+            }(document, 'script', 'Messenger'));
+            
+            let psid = null;
+            let validatedAccountName = null;
+            
+            window.extAsyncInit = function() {
+              MessengerExtensions.getUserID(function success(uids) {
+                psid = uids.psid;
+                setupForm();
+              }, function error(err, errorMessage) {
+                console.error('Messenger Extensions error:', err, errorMessage);
+              });
+            };
+            
+            function setupForm() {
+              const bankName = document.getElementById('bankName');
+              const accountNumber = document.getElementById('accountNumber');
+              const submitBtn = document.getElementById('submitBtn');
+              const accountError = document.getElementById('accountError');
+              const accountNameDisplay = document.getElementById('accountNameDisplay');
+              const validating = document.getElementById('validating');
+              
+              let validationTimeout = null;
+              
+              function validateAccount() {
+                if (bankName.value && accountNumber.value.length === 10) {
+                  accountError.style.display = 'none';
+                  accountNameDisplay.style.display = 'none';
+                  validating.style.display = 'block';
+                  submitBtn.disabled = true;
+                  
+                  fetch('/api/validate-account', {
+                    method: 'POST',
+                    headers: { 'Content-Type': 'application/json' },
+                    body: JSON.stringify({
+                      bankName: bankName.value,
+                      accountNumber: accountNumber.value
+                    })
+                  })
+                  .then(res => res.json())
+                  .then(data => {
+                    validating.style.display = 'none';
+                    if (data.accountName) {
+                      validatedAccountName = data.accountName;
+                      accountNameDisplay.textContent = '✅ ' + data.accountName;
+                      accountNameDisplay.style.display = 'block';
+                      submitBtn.disabled = false;
+                    } else {
+                      throw new Error(data.error || 'Could not verify account');
+                    }
+                  })
+                  .catch(err => {
+                    validating.style.display = 'none';
+                    accountError.textContent = err.message || 'Could not verify account. Please check details.';
+                    accountError.style.display = 'block';
+                    submitBtn.disabled = true;
+                  });
+                }
+              }
+              
+              accountNumber.addEventListener('input', function() {
+                clearTimeout(validationTimeout);
+                accountNameDisplay.style.display = 'none';
+                accountError.style.display = 'none';
+                submitBtn.disabled = true;
+                
+                if (this.value.length === 10 && bankName.value) {
+                  validationTimeout = setTimeout(validateAccount, 500);
+                }
+              });
+              
+              bankName.addEventListener('change', function() {
+                if (accountNumber.value.length === 10) {
+                  validateAccount();
+                }
+              });
+              
+              document.getElementById('bankForm').addEventListener('submit', function(e) {
+                e.preventDefault();
+                const errorMsg = document.getElementById('errorMsg');
+                const successMsg = document.getElementById('successMsg');
+                
+                errorMsg.style.display = 'none';
+                successMsg.style.display = 'none';
+                submitBtn.disabled = true;
+                submitBtn.textContent = 'Submitting...';
+                
+                fetch('/api/webview/save-bank-details', {
+                  method: 'POST',
+                  headers: { 'Content-Type': 'application/json' },
+                  body: JSON.stringify({
+                    psid,
+                    bankName: bankName.value,
+                    accountNumber: accountNumber.value,
+                    accountName: validatedAccountName,
+                    token: '${token}'
+                  })
+                })
+                .then(res => res.json())
+                .then(data => {
+                  if (data.success) {
+                    successMsg.textContent = '✅ Bank details saved!';
+                    successMsg.style.display = 'block';
+                    setTimeout(() => MessengerExtensions.requestCloseBrowser(), 1500);
+                  } else {
+                    throw new Error(data.error || 'Failed to save details');
+                  }
+                })
+                .catch(err => {
+                  errorMsg.textContent = err.message;
+                  errorMsg.style.display = 'block';
+                  submitBtn.disabled = false;
+                  submitBtn.textContent = 'Continue';
+                });
+              });
+            }
+          </script>
+        </body>
+      </html>
+    `;
+    res.send(html);
+  });
+
+  // API endpoint - Save PIN from webview
+  app.post("/api/webview/set-pin", async (req, res) => {
+    try {
+      const schema = z.object({
+        psid: z.string(),
+        pin: z.string().length(4).regex(/^[0-9]{4}$/),
+        securityQuestion: z.string(),
+        securityAnswer: z.string().min(1),
+      });
+      
+      const { psid, pin, securityQuestion, securityAnswer } = schema.parse(req.body);
+      
+      // Import PIN service
+      const { pinService } = await import("./services/pinService");
+      
+      // Set the PIN
+      await pinService.setPin(psid, pin, securityQuestion, securityAnswer);
+      
+      res.json({ success: true, message: "PIN set successfully" });
+    } catch (error: any) {
+      console.error("[Webview] Error setting PIN:", error);
+      res.status(400).json({ success: false, error: error.message || "Failed to set PIN" });
+    }
+  });
+
+  // API endpoint - Save bank details from webview
+  app.post("/api/webview/save-bank-details", async (req, res) => {
+    try {
+      const schema = z.object({
+        psid: z.string(),
+        bankName: z.string(),
+        accountNumber: z.string().length(10),
+        accountName: z.string(),
+        token: z.string().optional(),
+      });
+      
+      const data = schema.parse(req.body);
+      
+      // CRITICAL: Re-validate account with Flutterwave on server side
+      // This prevents bypassing client-side validation
+      console.log(`[Webview] Validating bank account ${data.accountNumber} at ${data.bankName}`);
+      
+      const validationResult = await flutterwaveService.validateBankAccount(
+        data.accountNumber,
+        data.bankName
+      );
+      
+      if (!validationResult || !validationResult.accountName) {
+        console.error(`[Webview] Bank account validation failed for ${data.accountNumber}`);
+        return res.status(400).json({ 
+          success: false, 
+          error: "Could not verify bank account. Please check account number and bank name." 
+        });
+      }
+      
+      // Verify the account name matches what was submitted
+      // This ensures the user saw the correct name before submitting
+      const normalizedSubmitted = data.accountName.toLowerCase().trim();
+      const normalizedValidated = validationResult.accountName.toLowerCase().trim();
+      
+      if (normalizedSubmitted !== normalizedValidated) {
+        console.error(`[Webview] Account name mismatch: submitted="${data.accountName}", validated="${validationResult.accountName}"`);
+        return res.status(400).json({
+          success: false,
+          error: "Account name mismatch. Please re-enter your details."
+        });
+      }
+      
+      console.log(`[Webview] Bank account validated successfully: ${validationResult.accountName}`);
+      
+      // Store validated bank details temporarily in storage for the transaction
+      await storage.savePendingBankDetails(data.psid, {
+        bankName: data.bankName,
+        accountNumber: data.accountNumber,
+        accountName: validationResult.accountName, // Use Flutterwave's validated name
+      });
+      
+      res.json({ success: true, message: "Bank details saved" });
+    } catch (error: any) {
+      console.error("[Webview] Error saving bank details:", error);
+      res.status(400).json({ success: false, error: error.message || "Failed to save bank details" });
+    }
+  });
+
   // Get exchange rates from CoinGecko API
   app.get("/api/rates", async (req, res) => {
     try {

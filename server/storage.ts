@@ -1,6 +1,13 @@
-import { users, transactions, type User, type InsertUser, type Transaction, type InsertTransaction } from "@shared/schema";
+import { users, transactions, messengerUsers, type User, type InsertUser, type Transaction, type InsertTransaction } from "@shared/schema";
 import { db } from "./db";
 import { eq, desc } from "drizzle-orm";
+
+interface PendingBankDetails {
+  bankName: string;
+  accountNumber: string;
+  accountName: string;
+  timestamp: number;
+}
 
 export interface IStorage {
   getUser(id: string): Promise<User | undefined>;
@@ -12,6 +19,10 @@ export interface IStorage {
   getAllTransactions(): Promise<Transaction[]>;
   updateTransactionStatus(id: string, status: string): Promise<Transaction | undefined>;
   updateTransaction(id: string, updates: Partial<Transaction>): Promise<Transaction | undefined>;
+  
+  savePendingBankDetails(psid: string, details: Omit<PendingBankDetails, 'timestamp'>): Promise<void>;
+  getPendingBankDetails(psid: string): Promise<PendingBankDetails | undefined>;
+  clearPendingBankDetails(psid: string): Promise<void>;
 }
 
 export class DatabaseStorage implements IStorage {
@@ -72,6 +83,46 @@ export class DatabaseStorage implements IStorage {
       .where(eq(transactions.id, id))
       .returning();
     return transaction || undefined;
+  }
+
+  async savePendingBankDetails(psid: string, details: Omit<PendingBankDetails, 'timestamp'>): Promise<void> {
+    const bankDetails = {
+      ...details,
+      timestamp: Date.now(),
+    };
+    
+    await db
+      .update(messengerUsers)
+      .set({ pendingBankDetails: bankDetails })
+      .where(eq(messengerUsers.messengerId, psid));
+  }
+
+  async getPendingBankDetails(psid: string): Promise<PendingBankDetails | undefined> {
+    const [user] = await db
+      .select()
+      .from(messengerUsers)
+      .where(eq(messengerUsers.messengerId, psid));
+    
+    if (!user || !user.pendingBankDetails) {
+      return undefined;
+    }
+    
+    const details = user.pendingBankDetails as PendingBankDetails;
+    const thirtyMinutes = 30 * 60 * 1000;
+    
+    if (Date.now() - details.timestamp > thirtyMinutes) {
+      await this.clearPendingBankDetails(psid);
+      return undefined;
+    }
+    
+    return details;
+  }
+
+  async clearPendingBankDetails(psid: string): Promise<void> {
+    await db
+      .update(messengerUsers)
+      .set({ pendingBankDetails: null })
+      .where(eq(messengerUsers.messengerId, psid));
   }
 }
 
