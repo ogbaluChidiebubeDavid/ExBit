@@ -166,6 +166,7 @@ class WebChatHandler {
 
           metadata = {
             type: "quote",
+            swapState: "awaiting_bank_details",
             data: {
               amount: swapRequest.amount,
               token: swapRequest.token,

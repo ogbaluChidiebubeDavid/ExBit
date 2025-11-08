@@ -9,6 +9,7 @@ import { motion, AnimatePresence } from "framer-motion";
 import exbitLogo from "@assets/exbit logo (1)_1762622679267.png";
 import { apiRequest } from "@/lib/queryClient";
 import { useToast } from "@/hooks/use-toast";
+import { BankDetailsForm } from "@/components/BankDetailsForm";
 
 interface Message {
   id: string;
@@ -26,6 +27,14 @@ export default function Chat() {
   const [isConnecting, setIsConnecting] = useState(false);
   const [isSending, setIsSending] = useState(false);
   const [provider, setProvider] = useState<ethers.BrowserProvider | null>(null);
+  
+  // Bank details state
+  const [showBankForm, setShowBankForm] = useState(false);
+  const [bankName, setBankName] = useState("");
+  const [accountNumber, setAccountNumber] = useState("");
+  const [accountName, setAccountName] = useState("");
+  const [isValidatingBank, setIsValidatingBank] = useState(false);
+  
   const { toast } = useToast();
   const messagesEndRef = useRef<HTMLDivElement>(null);
 
@@ -122,6 +131,11 @@ export default function Chat() {
 
       // Add assistant response
       setMessages((prev) => [...prev, response.assistantMessage]);
+      
+      // Check if bank details are needed (swap quote received)
+      if (response.assistantMessage.metadata?.swapState === "awaiting_bank_details") {
+        setShowBankForm(true);
+      }
     } catch (error: any) {
       console.error("Error sending message:", error);
       toast({
@@ -139,6 +153,66 @@ export default function Chat() {
       e.preventDefault();
       sendMessage();
     }
+  };
+
+  // Validate bank account when account number is complete
+  useEffect(() => {
+    if (bankName && accountNumber.length === 10 && !isValidatingBank) {
+      validateBankAccount();
+    } else if (accountNumber.length < 10) {
+      setAccountName("");
+    }
+  }, [bankName, accountNumber]);
+
+  const validateBankAccount = async () => {
+    if (!sessionId || !bankName || accountNumber.length !== 10) return;
+
+    setIsValidatingBank(true);
+    setAccountName("");
+
+    try {
+      const response: any = await apiRequest({
+        url: "/api/web-chat/validate-bank",
+        method: "POST",
+        body: {
+          sessionId,
+          bankName,
+          accountNumber,
+        },
+      });
+
+      setAccountName(response.accountName);
+      toast({
+        title: "Account Verified",
+        description: `Account belongs to ${response.accountName}`,
+      });
+    } catch (error: any) {
+      console.error("Bank validation error:", error);
+      toast({
+        title: "Validation Failed",
+        description: error.message || "Could not verify account",
+        variant: "destructive",
+      });
+    } finally {
+      setIsValidatingBank(false);
+    }
+  };
+
+  const submitBankDetails = async () => {
+    if (!accountName || !bankName || !accountNumber || !provider || !sessionId) {
+      toast({
+        title: "Missing Information",
+        description: "Please complete all bank details",
+        variant: "destructive",
+      });
+      return;
+    }
+
+    // TODO: Proceed with transaction signing
+    toast({
+      title: "Bank Details Saved",
+      description: "Proceeding to transaction signing...",
+    });
   };
 
   return (
@@ -290,6 +364,56 @@ export default function Chat() {
               </AnimatePresence>
               <div ref={messagesEndRef} />
             </ScrollArea>
+
+            {/* Bank Details Form */}
+            {showBankForm && (
+              <motion.div
+                initial={{ opacity: 0, y: 20 }}
+                animate={{ opacity: 1, y: 0 }}
+                className="my-4"
+              >
+                <Card>
+                  <CardContent className="p-6">
+                    <h3 className="text-lg font-semibold mb-4">Enter Your Bank Details</h3>
+                    <BankDetailsForm
+                      bankName={bankName}
+                      accountNumber={accountNumber}
+                      accountName={accountName}
+                      onBankChange={setBankName}
+                      onAccountNumberChange={setAccountNumber}
+                    />
+                    <div className="mt-6 flex gap-2 justify-end">
+                      <Button
+                        variant="outline"
+                        onClick={() => {
+                          setShowBankForm(false);
+                          setBankName("");
+                          setAccountNumber("");
+                          setAccountName("");
+                        }}
+                        data-testid="button-cancel-bank"
+                      >
+                        Cancel
+                      </Button>
+                      <Button
+                        onClick={submitBankDetails}
+                        disabled={!accountName || isValidatingBank}
+                        data-testid="button-submit-bank"
+                      >
+                        {isValidatingBank ? (
+                          <>
+                            <Loader2 className="h-4 w-4 mr-2 animate-spin" />
+                            Validating...
+                          </>
+                        ) : (
+                          "Continue to Sign Transaction"
+                        )}
+                      </Button>
+                    </div>
+                  </CardContent>
+                </Card>
+              </motion.div>
+            )}
 
             {/* Input Area */}
             <div className="mt-4">
