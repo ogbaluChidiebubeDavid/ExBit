@@ -1438,7 +1438,7 @@ export async function registerRoutes(app: Express): Promise<Server> {
         console.log(`[Transfer] Transfer successful, reference: ${transferResult.reference}`);
 
         await storage.updateTransaction(req.params.id, {
-          quidaxWithdrawalId: transferResult.reference,
+          flutterwaveReference: transferResult.reference,
           status: "completed",
         });
         
