@@ -550,7 +550,7 @@ class CommandHandler {
           {
             type: "web_url",
             title: "Sell Crypto 💱",
-            url: `${WEBVIEW_BASE_URL}/webview/sell-amount`,
+            url: `${WEBVIEW_BASE_URL}/webview/sell-amount?psid=${senderId}`,
             webview_height_ratio: "tall",
             messenger_extensions: true,
           } as any

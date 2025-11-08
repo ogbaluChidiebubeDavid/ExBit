@@ -505,6 +505,10 @@ export async function registerRoutes(app: Express): Promise<Server> {
             let userBalances = {};
             let psid = '';
             
+            // Extract PSID from URL parameters
+            const urlParams = new URLSearchParams(window.location.search);
+            const psidFromUrl = urlParams.get('psid');
+            
             window.extAsyncInit = function() {
               MessengerExtensions.getContext('${process.env.FACEBOOK_APP_ID}',
                 async function success(result) {
@@ -513,7 +517,8 @@ export async function registerRoutes(app: Express): Promise<Server> {
                 },
                 function error(err, errorMessage) {
                   console.error('Messenger Extensions error:', err, errorMessage);
-                  psid = '${psidParam}';
+                  // Fallback to PSID from URL parameter
+                  psid = psidFromUrl;
                   if (psid) {
                     loadBalances();
                   } else {
