@@ -1,0 +1,75 @@
+#output-manualchunks
+- Adjust chunk size limit for this warning via build.chunkSizeWarningLimit.
+✓ built in 4.69s
+  dist/index.js  204.7kb
+⚡ Done in 10ms
+==> Uploading build...
+==> Uploaded in 6.4s. Compression took 2.8s
+==> Build successful 🎉
+==> Deploying...
+==> Running 'npm start'
+> rest-express@1.0.0 start
+> NODE_ENV=production node dist/index.js
+[BlockchainMonitor] Initialized provider for Ethereum
+[BlockchainMonitor] Initialized provider for BSC
+[BlockchainMonitor] Initialized provider for Polygon
+[BlockchainMonitor] Initialized provider for Arbitrum
+[BlockchainMonitor] Initialized provider for Base
+[BlockchainMonitor] Blockchain monitoring ENABLED
+10:42:53 PM [express] serving on port 5000
+[BlockchainMonitor] Resuming monitoring for 1 existing users
+[BlockchainMonitor] Started monitoring Ethereum for 0x0D81018Fd2E3Af827b63bDB121a2276907D3adF1
+[BlockchainMonitor] Started monitoring BSC for 0x0D81018Fd2E3Af827b63bDB121a2276907D3adF1
+[BlockchainMonitor] Started monitoring Polygon for 0x0D81018Fd2E3Af827b63bDB121a2276907D3adF1
+[BlockchainMonitor] Started monitoring Arbitrum for 0x0D81018Fd2E3Af827b63bDB121a2276907D3adF1
+[BlockchainMonitor] Started monitoring Base for 0x0D81018Fd2E3Af827b63bDB121a2276907D3adF1
+[BlockchainMonitor] Resumed monitoring for all existing users
+[BlockchainMonitor] Resuming confirmation tracking for 0 pending deposits
+[BlockchainMonitor] Resumed confirmation tracking for all pending deposits
+==> Your service is live 🎉
+==> 
+==> ///////////////////////////////////////////////////////////
+==> 
+==> Available at your primary URL https://exbit.onrender.com
+==> 
+==> ///////////////////////////////////////////////////////////
+[BlockchainMonitor] Base: Checking blocks 37921743 to 37921752 (current: 37926215)
+[BlockchainMonitor] Base: Checking blocks 37921743 to 37921752 (current: 37926217)
+[BlockchainMonitor] Error checking deposits for arbitrum: 
+[BlockchainMonitor] Base: Checking blocks 37921743 to 37921752 (current: 37926220)
+[BlockchainMonitor] Error checking deposits for arbitrum: 
+[BlockchainMonitor] Base: Checking blocks 37921752 to 37921761 (current: 37926222)
+[BlockchainMonitor] Base: Checking blocks 37921752 to 37921761 (current: 37926227)
+[BlockchainMonitor] Base: Checking blocks 37921752 to 37921761 (current: 37926228)
+[BlockchainMonitor] Base: Checking blocks 37921752 to 37921761 (current: 37926232)
+[BlockchainMonitor] Error checking deposits for arbitrum: 
+[BlockchainMonitor] Error checking deposits for base: 
+[BlockchainMonitor] Error checking deposits for bsc: 
+[BlockchainMonitor] Error processing block 23757597: request timeout (code=TIMEOUT, version=6.15.0)
+[BlockchainMonitor] Base: Checking blocks 37921752 to 37921761 (current: 37926234)
+[BlockchainMonitor] Error checking deposits for bsc: 
+[BlockchainMonitor] Base: Checking blocks 37921752 to 37921761 (current: 37926239)
+[BlockchainMonitor] Error checking deposits for base: request timeout (code=TIMEOUT, version=6.15.0)
+[BlockchainMonitor] Error checking deposits for polygon: request timeout (code=TIMEOUT, version=6.15.0)
+[BlockchainMonitor] Error checking deposits for base: request timeout (code=TIMEOUT, version=6.15.0)
+[BlockchainMonitor] Error checking deposits for arbitrum: 
+[BlockchainMonitor] Error checking deposits for polygon: request timeout (code=TIMEOUT, version=6.15.0)
+[BlockchainMonitor] Error checking deposits for arbitrum: request timeout (code=TIMEOUT, version=6.15.0)
+[BlockchainMonitor] Error processing block 398166812: request timeout (code=TIMEOUT, version=6.15.0)
+[BlockchainMonitor] Base: Checking blocks 37921752 to 37921761 (current: 37926244)
+[BlockchainMonitor] Error checking deposits for polygon: 
+[BlockchainMonitor] Error checking deposits for polygon: 
+[BlockchainMonitor] Error checking deposits for polygon: request timeout (code=TIMEOUT, version=6.15.0)
+[BlockchainMonitor] Error checking deposits for arbitrum: request timeout (code=TIMEOUT, version=6.15.0)
+[BlockchainMonitor] Error checking deposits for ethereum: request timeout (code=TIMEOUT, version=6.15.0)
+[BlockchainMonitor] Error checking deposits for arbitrum: 
+[BlockchainMonitor] Base: Checking blocks 37921752 to 37921761 (current: 37926249)
+[BlockchainMonitor] Error checking deposits for arbitrum: 
+[BlockchainMonitor] Error checking deposits for arbitrum: request timeout (code=TIMEOUT, version=6.15.0)
+[BlockchainMonitor] Error processing block 398166965: request timeout (code=TIMEOUT, version=6.15.0)
+[BlockchainMonitor] Error checking deposits for polygon: request timeout (code=TIMEOUT, version=6.15.0)
+[BlockchainMonitor] Error checking deposits for base: request timeout (code=TIMEOUT, version=6.15.0)
+[BlockchainMonitor] Error processing block 37921753: request timeout (code=TIMEOUT, version=6.15.0)
+[BlockchainMonitor] Error checking deposits for bsc: request timeout (code=TIMEOUT, version=6.15.0)
+[BlockchainMonitor] Error checking deposits for polygon: 
+[BlockchainMonitor] Error checking deposits for polygon: request timeout (code=TIMEOUT, version=6.15.0)
