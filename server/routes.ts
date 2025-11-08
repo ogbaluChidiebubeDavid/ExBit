@@ -1968,6 +1968,68 @@ export async function registerRoutes(app: Express): Promise<Server> {
     res.json(transactions);
   });
 
+  // Web Chat API Routes
+
+  // Connect wallet and create/get session
+  app.post("/api/web-chat/connect", async (req, res) => {
+    try {
+      const { walletAddress } = req.body;
+      
+      if (!walletAddress) {
+        return res.status(400).json({ error: "Wallet address is required" });
+      }
+
+      const { webChatHandler } = await import("./services/webChatHandler");
+      const result = await webChatHandler.connectWallet(walletAddress);
+      
+      res.json(result);
+    } catch (error: any) {
+      console.error("[WebChat] Error connecting wallet:", error);
+      res.status(500).json({ error: error.message || "Failed to connect wallet" });
+    }
+  });
+
+  // Send message in web chat
+  app.post("/api/web-chat/message", async (req, res) => {
+    try {
+      const { sessionId, message } = req.body;
+      
+      if (!sessionId || !message) {
+        return res.status(400).json({ error: "Session ID and message are required" });
+      }
+
+      const { webChatHandler } = await import("./services/webChatHandler");
+      const result = await webChatHandler.handleMessage(sessionId, message);
+      
+      res.json({
+        message: result.userMsg,
+        assistantMessage: result.assistantMsg,
+      });
+    } catch (error: any) {
+      console.error("[WebChat] Error handling message:", error);
+      res.status(500).json({ error: error.message || "Failed to send message" });
+    }
+  });
+
+  // Validate bank account for web chat
+  app.post("/api/web-chat/validate-bank", async (req, res) => {
+    try {
+      const { sessionId, bankName, accountNumber } = req.body;
+      
+      if (!sessionId || !bankName || !accountNumber) {
+        return res.status(400).json({ error: "Session ID, bank name, and account number are required" });
+      }
+
+      const { webChatHandler } = await import("./services/webChatHandler");
+      const result = await webChatHandler.validateBankAccount(sessionId, bankName, accountNumber);
+      
+      res.json(result);
+    } catch (error: any) {
+      console.error("[WebChat] Error validating bank account:", error);
+      res.status(500).json({ error: error.message || "Failed to validate bank account" });
+    }
+  });
+
   const httpServer = createServer(app);
 
   return httpServer;

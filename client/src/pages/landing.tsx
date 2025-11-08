@@ -113,11 +113,11 @@ export default function Landing() {
                 size="lg"
                 variant="outline"
                 className="gap-2 w-full sm:w-auto text-lg px-8 py-6 rounded-full"
+                onClick={() => window.location.href = "/chat"}
                 data-testid="button-web-agent-hero"
-                disabled
               >
                 <Zap className="h-5 w-5" />
-                Web Agent (Coming Soon)
+                Web Agent
               </Button>
             </motion.div>
 
