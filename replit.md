@@ -102,12 +102,14 @@ I prefer simple language and direct instructions. I want iterative development w
 10. **Bot**: "Send USDT/BNB to: 0xABC123... [Copy button]"
 11. **User**: Sends 100 USDT from Trust Wallet
 12. **Bot**: "✅ Received 100 USDT! Balance: 100 USDT. Type /sell to convert"
-13. **User**: "/sell 100 USDT"
-14. **Bot**: "Rate: ₦1,436/USDT = ₦143,647. Fee: ₦143. You get: ₦143,503" → [Enter Bank Details]
-15. **User**: Clicks secure form → enters bank account
-16. **Bot**: "Confirm: ₦143,503 to Access Bank •••6789? Enter PIN:"
-17. **User**: Enters PIN (1234)
-18. **Bot**: "✅ Processing... [30 sec] ✅ Sent! TX: FLW-12345"
+13. **User**: "/sell"
+14. **Bot**: "Ready to sell your crypto!" → [Opens sell amount webview button]
+15. **User**: Clicks button → Webview shows balances, selects USDT, enters 100
+16. **Bot**: "Selling 100 USDT, Rate: ₦1,436/USDT, You'll receive: ₦143,503, Fee: ₦143" → [Opens bank details webview button]
+17. **User**: Clicks button → Enters bank (Access Bank) + account number (1234567890) → System auto-fetches account name "John Doe"
+18. **Bot**: "Confirm: ₦143,503 to Access Bank - John Doe (•••6789)? Enter PIN:"
+19. **User**: Enters PIN (1234)
+20. **Bot**: "✅ Processing... [30 sec] ✅ Sent! TX: QDX-12345"
 
 ## Business Model
 
@@ -133,7 +135,12 @@ I prefer simple language and direct instructions. I want iterative development w
 - ✅ **Webview Button Integration**: Bot sends webview buttons for all sensitive data (no chat history exposure)
 - ✅ **Quidax Sell Integration**: Real-time market prices, instant sell orders, confirmation flow
 - ✅ **Quidax Withdrawal Integration**: NGN bank transfers with full validation and error handling
-- ✅ **Complete /sell Flow**: Balance check → Quidax rate → bank details webview → PIN verification → execute trade → withdraw to bank
+- ✅ **Complete /sell Flow (Webview-Based)**: 
+  - /sell command → sell amount webview (select token + enter amount)
+  - Auto-fetch Quidax market price and calculate fees
+  - Bank details webview (auto-fetch account name via Flutterwave)
+  - PIN verification → execute trade → withdraw to bank
+  - **Zero chat messages for sensitive data** - entire flow happens in webviews
 - ✅ **Transaction Tracking**: Full database records with Quidax order/withdrawal IDs, balance management with negative deposits
 - ✅ **Server-initiated Flow Continuation**: Webview completions automatically trigger next steps without user input
 - ✅ **Concurrency Guard**: Atomic balance checking with `SELECT FOR UPDATE` row locking prevents double-spending in concurrent sell requests

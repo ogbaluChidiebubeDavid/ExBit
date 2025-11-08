@@ -43,7 +43,7 @@ class CommandHandler {
       const user = existingUsers[0];
 
       // Handle webview completion postbacks
-      if (postbackPayload === "WEBVIEW_PIN_COMPLETE" || postbackPayload === "WEBVIEW_BANK_COMPLETE") {
+      if (postbackPayload === "WEBVIEW_PIN_COMPLETE" || postbackPayload === "WEBVIEW_BANK_COMPLETE" || postbackPayload === "WEBVIEW_SELL_AMOUNT_COMPLETE") {
         // Refresh user data to get updated info from webview
         const refreshedUsers = await db
           .select()
@@ -57,6 +57,12 @@ class CommandHandler {
           // Check if PIN was set and complete wallet creation
           if (refreshedUser.transactionPin && refreshedUser.securityQuestion) {
             await this.completeWalletCreation(senderId, refreshedUser);
+            return;
+          }
+        } else if (postbackPayload === "WEBVIEW_SELL_AMOUNT_COMPLETE" && refreshedUser) {
+          // Check if sell amount was saved and continue flow
+          if (refreshedUser.sellConversationState === "AWAIT_BANK_DETAILS" && refreshedUser.sellConversationData) {
+            await this.handleSellAmountWebviewCompletion(senderId);
             return;
           }
         } else if (postbackPayload === "WEBVIEW_BANK_COMPLETE" && refreshedUser) {
