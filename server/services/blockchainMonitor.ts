@@ -264,7 +264,7 @@ class BlockchainMonitorService {
 
       let lastCheckedBlock = stateRecord
         ? parseInt(stateRecord.lastCheckedBlock)
-        : Math.max(0, currentBlock - 1000); // Look back 1000 blocks for brand new wallets (~33 mins on Base)
+        : Math.max(0, currentBlock - 3000); // Look back 3000 blocks for brand new wallets (~100 mins on Base)
 
       // Limit block range to comply with Alchemy free tier (max 10 blocks per eth_getLogs request)
       // Process in chunks to catch up if there's a backlog
@@ -366,7 +366,7 @@ class BlockchainMonitorService {
             if (tx.to?.toLowerCase() !== address.toLowerCase()) continue;
 
             // Check if transaction has value (native token transfer)
-            if (!tx.value || tx.value === 0n) continue;
+            if (!tx.value || tx.value === BigInt(0)) continue;
 
             const txHash = tx.hash;
 
@@ -396,9 +396,12 @@ class BlockchainMonitorService {
             const config = BLOCKCHAIN_CONFIG[blockchain];
             
             // Get the native token symbol
-            const nativeToken = Object.keys(config.tokens).find(
-              k => config.tokens[k as keyof typeof config.tokens] === "native"
-            ) || "ETH";
+            const nativeToken = (Object.keys(config.tokens) as Array<keyof typeof config.tokens>).find(
+              k => {
+                const tokenValue = config.tokens[k];
+                return tokenValue === "native";
+              }
+            ) as string || "ETH";
 
             // Save deposit to database
             await db.insert(deposits).values({
@@ -714,11 +717,14 @@ class BlockchainMonitorService {
       const config = BLOCKCHAIN_CONFIG[blockchain];
 
       // Check native balance (ETH, BNB, MATIC, etc.)
-      const tokenConfig = config.tokens[tokenSymbol as keyof typeof config.tokens];
-      if (!tokenSymbol || tokenConfig === "native") {
+      const tokenConfig = tokenSymbol ? config.tokens[tokenSymbol as keyof typeof config.tokens] : undefined;
+      const isNativeToken = tokenConfig === "native";
+      if (!tokenSymbol || isNativeToken) {
         const balance = await provider.getBalance(address);
         const formattedBalance = ethers.formatEther(balance);
-        const nativeToken = Object.keys(config.tokens).find(k => config.tokens[k as keyof typeof config.tokens] === "native") || "ETH";
+        const nativeToken = (Object.keys(config.tokens) as Array<keyof typeof config.tokens>).find(k => {
+          return config.tokens[k] === "native";
+        }) as string || "ETH";
         return {
           blockchain,
           token: tokenSymbol || nativeToken,
