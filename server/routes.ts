@@ -308,6 +308,382 @@ export async function registerRoutes(app: Express): Promise<Server> {
     res.send(html);
   });
 
+  // Messenger Webview - Sell Amount Entry
+  app.get("/webview/sell-amount", async (req, res) => {
+    const psidParam = req.query.psid || "";
+    
+    const html = `
+      <!DOCTYPE html>
+      <html>
+        <head>
+          <meta charset="UTF-8">
+          <meta name="viewport" content="width=device-width, initial-scale=1.0">
+          <title>Sell Crypto</title>
+          <style>
+            * { box-sizing: border-box; margin: 0; padding: 0; }
+            body {
+              font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, sans-serif;
+              background: linear-gradient(135deg, #10b981 0%, #059669 100%);
+              min-height: 100vh;
+              display: flex;
+              align-items: center;
+              justify-content: center;
+              padding: 20px;
+            }
+            .container {
+              background: white;
+              border-radius: 16px;
+              padding: 32px 24px;
+              max-width: 400px;
+              width: 100%;
+              box-shadow: 0 20px 60px rgba(0,0,0,0.2);
+            }
+            h1 {
+              font-size: 24px;
+              color: #1a1a1a;
+              margin-bottom: 8px;
+              text-align: center;
+            }
+            .subtitle {
+              font-size: 14px;
+              color: #666;
+              text-align: center;
+              margin-bottom: 24px;
+            }
+            .balance-list {
+              margin-bottom: 24px;
+            }
+            .balance-item {
+              background: #f3f4f6;
+              padding: 16px;
+              border-radius: 12px;
+              margin-bottom: 12px;
+              cursor: pointer;
+              transition: all 0.2s;
+              border: 2px solid transparent;
+            }
+            .balance-item:hover {
+              background: #e5e7eb;
+            }
+            .balance-item.selected {
+              background: #dbeafe;
+              border-color: #10b981;
+            }
+            .balance-item .token-name {
+              font-weight: 700;
+              font-size: 16px;
+              color: #1a1a1a;
+              margin-bottom: 4px;
+            }
+            .balance-item .chain-name {
+              font-size: 12px;
+              color: #666;
+              margin-bottom: 4px;
+            }
+            .balance-item .balance-amount {
+              font-size: 20px;
+              font-weight: 600;
+              color: #10b981;
+            }
+            .form-group {
+              margin-bottom: 20px;
+            }
+            label {
+              display: block;
+              font-size: 14px;
+              font-weight: 600;
+              color: #333;
+              margin-bottom: 8px;
+            }
+            input {
+              width: 100%;
+              padding: 12px 16px;
+              border: 2px solid #e0e0e0;
+              border-radius: 8px;
+              font-size: 16px;
+              transition: border-color 0.3s;
+            }
+            input:focus {
+              outline: none;
+              border-color: #10b981;
+            }
+            .btn {
+              width: 100%;
+              padding: 14px;
+              background: linear-gradient(135deg, #10b981 0%, #059669 100%);
+              color: white;
+              border: none;
+              border-radius: 8px;
+              font-size: 16px;
+              font-weight: 600;
+              cursor: pointer;
+              transition: transform 0.2s;
+            }
+            .btn:hover { transform: translateY(-2px); }
+            .btn:disabled {
+              background: #ccc;
+              cursor: not-allowed;
+              transform: none;
+            }
+            .error-msg, .success-msg, .loading-msg {
+              padding: 12px;
+              border-radius: 8px;
+              margin-bottom: 16px;
+              display: none;
+              text-align: center;
+            }
+            .error-msg { background: #fee2e2; color: #991b1b; }
+            .success-msg { background: #d1fae5; color: #065f46; }
+            .loading-msg { background: #dbeafe; color: #1e40af; }
+            .loading-msg.show, .error-msg.show, .success-msg.show {
+              display: block;
+            }
+            .max-btn {
+              display: inline-block;
+              background: #10b981;
+              color: white;
+              padding: 6px 12px;
+              border-radius: 6px;
+              font-size: 12px;
+              font-weight: 600;
+              cursor: pointer;
+              margin-left: 8px;
+            }
+            .max-btn:hover {
+              background: #059669;
+            }
+            #selectedBalance {
+              display: none;
+              background: linear-gradient(135deg, #10b981 0%, #059669 100%);
+              color: white;
+              padding: 16px;
+              border-radius: 12px;
+              text-align: center;
+              margin-bottom: 20px;
+            }
+            #selectedBalance .label {
+              font-size: 12px;
+              opacity: 0.9;
+              margin-bottom: 4px;
+            }
+            #selectedBalance .value {
+              font-size: 24px;
+              font-weight: 700;
+            }
+          </style>
+          <script src="https://connect.facebook.net/en_US/messenger.Extensions.js"></script>
+        </head>
+        <body>
+          <div class="container">
+            <h1>💱 Sell Crypto</h1>
+            <p class="subtitle">Select token and enter amount to sell</p>
+            
+            <div class="loading-msg" id="loadingMsg">Loading your balances...</div>
+            <div class="error-msg" id="errorMsg"></div>
+            <div class="success-msg" id="successMsg"></div>
+            
+            <div id="balanceList" class="balance-list"></div>
+            
+            <div id="selectedBalance"></div>
+            
+            <div class="form-group" id="amountGroup" style="display:none;">
+              <label for="amount">Amount to Sell <span class="max-btn" onclick="setMaxAmount()">MAX</span></label>
+              <input 
+                type="number" 
+                id="amount" 
+                step="any" 
+                placeholder="0.00"
+                required
+              >
+            </div>
+            
+            <button type="button" class="btn" id="submitBtn" onclick="submitSellAmount()">Continue</button>
+          </div>
+          
+          <script>
+            let selectedToken = null;
+            let userBalances = {};
+            let psid = '';
+            
+            window.extAsyncInit = function() {
+              MessengerExtensions.getContext('${process.env.FACEBOOK_APP_ID}',
+                async function success(result) {
+                  psid = result.psid;
+                  await loadBalances();
+                },
+                function error(err, errorMessage) {
+                  console.error('Messenger Extensions error:', err, errorMessage);
+                  psid = '${psidParam}';
+                  if (psid) {
+                    loadBalances();
+                  } else {
+                    document.getElementById('errorMsg').textContent = 'Failed to get user context';
+                    document.getElementById('errorMsg').classList.add('show');
+                  }
+                }
+              );
+            };
+            
+            async function loadBalances() {
+              const loadingMsg = document.getElementById('loadingMsg');
+              const errorMsg = document.getElementById('errorMsg');
+              const balanceList = document.getElementById('balanceList');
+              
+              loadingMsg.classList.add('show');
+              
+              try {
+                const response = await fetch('/api/webview/get-balances', {
+                  method: 'POST',
+                  headers: { 'Content-Type': 'application/json' },
+                  body: JSON.stringify({ psid })
+                });
+                
+                const data = await response.json();
+                loadingMsg.classList.remove('show');
+                
+                if (!data.success) {
+                  throw new Error(data.error || 'Failed to load balances');
+                }
+                
+                userBalances = data.balances;
+                
+                if (Object.keys(userBalances).length === 0) {
+                  errorMsg.textContent = '❌ No crypto found. Deposit first using /deposit command.';
+                  errorMsg.classList.add('show');
+                  document.getElementById('submitBtn').disabled = true;
+                  return;
+                }
+                
+                // Display balances
+                for (const [key, amount] of Object.entries(userBalances)) {
+                  const [blockchain, token] = key.split('-');
+                  const chainNames = {
+                    ethereum: 'Ethereum',
+                    bsc: 'BSC',
+                    polygon: 'Polygon',
+                    arbitrum: 'Arbitrum',
+                    base: 'Base'
+                  };
+                  
+                  const balanceItem = document.createElement('div');
+                  balanceItem.className = 'balance-item';
+                  balanceItem.dataset.key = key;
+                  balanceItem.innerHTML = \`
+                    <div class="token-name">\${token}</div>
+                    <div class="chain-name">\${chainNames[blockchain] || blockchain}</div>
+                    <div class="balance-amount">\${amount} \${token}</div>
+                  \`;
+                  balanceItem.onclick = () => selectBalance(key, blockchain, token, amount);
+                  balanceList.appendChild(balanceItem);
+                }
+                
+                // Auto-select if only one balance
+                if (Object.keys(userBalances).length === 1) {
+                  const [key, amount] = Object.entries(userBalances)[0];
+                  const [blockchain, token] = key.split('-');
+                  selectBalance(key, blockchain, token, amount);
+                }
+              } catch (error) {
+                loadingMsg.classList.remove('show');
+                errorMsg.textContent = error.message;
+                errorMsg.classList.add('show');
+                document.getElementById('submitBtn').disabled = true;
+              }
+            }
+            
+            function selectBalance(key, blockchain, token, amount) {
+              selectedToken = { key, blockchain, token, amount };
+              
+              // Update UI
+              document.querySelectorAll('.balance-item').forEach(item => {
+                item.classList.remove('selected');
+              });
+              document.querySelector(\`[data-key="\${key}"]\`).classList.add('selected');
+              
+              // Show amount input
+              document.getElementById('amountGroup').style.display = 'block';
+              document.getElementById('selectedBalance').style.display = 'block';
+              document.getElementById('selectedBalance').innerHTML = \`
+                <div class="label">Available</div>
+                <div class="value">\${amount} \${token}</div>
+              \`;
+              
+              // Clear previous amount
+              document.getElementById('amount').value = '';
+              document.getElementById('submitBtn').disabled = false;
+            }
+            
+            function setMaxAmount() {
+              if (selectedToken) {
+                document.getElementById('amount').value = selectedToken.amount;
+              }
+            }
+            
+            async function submitSellAmount() {
+              const errorMsg = document.getElementById('errorMsg');
+              const successMsg = document.getElementById('successMsg');
+              const submitBtn = document.getElementById('submitBtn');
+              const amount = document.getElementById('amount').value;
+              
+              errorMsg.classList.remove('show');
+              successMsg.classList.remove('show');
+              
+              if (!selectedToken) {
+                errorMsg.textContent = 'Please select a token to sell';
+                errorMsg.classList.add('show');
+                return;
+              }
+              
+              if (!amount || parseFloat(amount) <= 0) {
+                errorMsg.textContent = 'Please enter a valid amount';
+                errorMsg.classList.add('show');
+                return;
+              }
+              
+              if (parseFloat(amount) > parseFloat(selectedToken.amount)) {
+                errorMsg.textContent = \`Amount exceeds available balance (\${selectedToken.amount} \${selectedToken.token})\`;
+                errorMsg.classList.add('show');
+                return;
+              }
+              
+              submitBtn.disabled = true;
+              submitBtn.textContent = 'Processing...';
+              
+              try {
+                const response = await fetch('/api/webview/save-sell-amount', {
+                  method: 'POST',
+                  headers: { 'Content-Type': 'application/json' },
+                  body: JSON.stringify({
+                    psid,
+                    blockchain: selectedToken.blockchain,
+                    token: selectedToken.token,
+                    amount: amount
+                  })
+                });
+                
+                const data = await response.json();
+                
+                if (data.success) {
+                  successMsg.textContent = '✅ Processing...';
+                  successMsg.classList.add('show');
+                  setTimeout(() => MessengerExtensions.requestCloseBrowser(), 1000);
+                } else {
+                  throw new Error(data.error || 'Failed to process sell request');
+                }
+              } catch (error) {
+                errorMsg.textContent = error.message;
+                errorMsg.classList.add('show');
+                submitBtn.disabled = false;
+                submitBtn.textContent = 'Continue';
+              }
+            }
+          </script>
+        </body>
+      </html>
+    `;
+    res.send(html);
+  });
+
   // Messenger Webview - Bank Details Entry
   app.get("/webview/bank-details", (req, res) => {
     const amount = req.query.amount || "0";
@@ -651,6 +1027,124 @@ export async function registerRoutes(app: Express): Promise<Server> {
     } catch (error: any) {
       console.error("[Webview] Error setting PIN:", error);
       res.status(400).json({ success: false, error: error.message || "Failed to set PIN" });
+    }
+  });
+
+  // API endpoint - Get user balances for sell webview
+  app.post("/api/webview/get-balances", async (req, res) => {
+    try {
+      const schema = z.object({
+        psid: z.string(),
+      });
+      
+      const { psid } = schema.parse(req.body);
+      
+      // Get user from PSID
+      const [user] = await db
+        .select()
+        .from(messengerUsers)
+        .where(eq(messengerUsers.messengerId, psid))
+        .limit(1);
+      
+      if (!user) {
+        return res.status(404).json({ success: false, error: "User not found" });
+      }
+      
+      // Get balances
+      const { blockchainMonitor } = await import("./services/blockchainMonitor");
+      const balances = await blockchainMonitor.getDepositBalance(user.id);
+      
+      res.json({ success: true, balances });
+    } catch (error: any) {
+      console.error("[Webview] Error fetching balances:", error);
+      res.status(400).json({ success: false, error: error.message || "Failed to fetch balances" });
+    }
+  });
+
+  // API endpoint - Save sell amount from webview
+  app.post("/api/webview/save-sell-amount", async (req, res) => {
+    try {
+      const schema = z.object({
+        psid: z.string(),
+        blockchain: z.string(),
+        token: z.string(),
+        amount: z.string(),
+      });
+      
+      const data = schema.parse(req.body);
+      
+      // Get user
+      const [user] = await db
+        .select()
+        .from(messengerUsers)
+        .where(eq(messengerUsers.messengerId, data.psid))
+        .limit(1);
+      
+      if (!user) {
+        return res.status(404).json({ success: false, error: "User not found" });
+      }
+      
+      // Validate amount
+      const { blockchainMonitor } = await import("./services/blockchainMonitor");
+      const balances = await blockchainMonitor.getDepositBalance(user.id);
+      const balanceKey = `${data.blockchain}-${data.token}`;
+      const availableBalance = balances[balanceKey] || 0;
+      
+      if (parseFloat(data.amount) > availableBalance) {
+        return res.status(400).json({ 
+          success: false, 
+          error: `Insufficient balance. Available: ${availableBalance} ${data.token}` 
+        });
+      }
+      
+      // Get Quidax market price
+      const { quidaxService } = await import("./services/quidaxService");
+      let quidaxRate;
+      try {
+        quidaxRate = await quidaxService.getMarketPrice(data.token.toUpperCase());
+      } catch (error) {
+        console.error("[Webview] Failed to fetch Quidax price:", error);
+        return res.status(500).json({
+          success: false,
+          error: "Sorry, I couldn't fetch the current market price. Please try again in a moment."
+        });
+      }
+      
+      // Calculate amounts
+      const amount = parseFloat(data.amount);
+      const nairaAmount = amount * quidaxRate;
+      const platformFee = nairaAmount * 0.001; // 0.1% fee
+      const netAmount = nairaAmount - platformFee;
+      
+      // Save to conversation state
+      await db
+        .update(messengerUsers)
+        .set({
+          sellConversationState: "AWAIT_BANK_DETAILS",
+          sellConversationData: {
+            blockchain: data.blockchain,
+            token: data.token,
+            amount: data.amount,
+            quidaxRate: quidaxRate.toString(),
+            nairaAmount: nairaAmount.toString(),
+            platformFee: platformFee.toString(),
+            netAmount: netAmount.toString(),
+          },
+        })
+        .where(eq(messengerUsers.id, user.id));
+      
+      res.json({ success: true, message: "Sell amount saved" });
+      
+      // Server-initiated flow continuation (don't await - run async)
+      const { commandHandler } = await import("./services/commandHandler");
+      setTimeout(() => {
+        commandHandler.handleSellAmountWebviewCompletion(data.psid).catch(err => {
+          console.error("[Webview] Error in sell amount completion handler:", err);
+        });
+      }, 500); // Small delay to ensure response is sent first
+    } catch (error: any) {
+      console.error("[Webview] Error saving sell amount:", error);
+      res.status(400).json({ success: false, error: error.message || "Failed to save sell amount" });
     }
   });
 
