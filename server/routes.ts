@@ -687,7 +687,25 @@ export async function registerRoutes(app: Express): Promise<Server> {
                 if (data.success) {
                   successMsg.textContent = '✅ Saved! Closing...';
                   successMsg.classList.add('show');
-                  setTimeout(() => MessengerExtensions.requestCloseBrowser(), 800);
+                  
+                  // Try to close webview
+                  setTimeout(() => {
+                    if (typeof MessengerExtensions !== 'undefined') {
+                      console.log('[Webview] Closing via MessengerExtensions');
+                      MessengerExtensions.requestCloseBrowser(
+                        function success() {
+                          console.log('[Webview] Close successful');
+                        },
+                        function error(err) {
+                          console.error('[Webview] Close failed:', err);
+                          successMsg.textContent = '✅ Saved! You can close this window now.';
+                        }
+                      );
+                    } else {
+                      console.error('[Webview] MessengerExtensions not available');
+                      successMsg.textContent = '✅ Saved! You can close this window now.';
+                    }
+                  }, 500);
                 } else {
                   throw new Error(data.error || 'Failed to process sell request');
                 }
@@ -987,7 +1005,25 @@ export async function registerRoutes(app: Express): Promise<Server> {
                   if (data.success) {
                     successMsg.textContent = '✅ Bank details saved!';
                     successMsg.style.display = 'block';
-                    setTimeout(() => MessengerExtensions.requestCloseBrowser(), 1500);
+                    
+                    // Try to close webview
+                    setTimeout(() => {
+                      if (typeof MessengerExtensions !== 'undefined') {
+                        console.log('[Webview] Closing bank details via MessengerExtensions');
+                        MessengerExtensions.requestCloseBrowser(
+                          function success() {
+                            console.log('[Webview] Bank details close successful');
+                          },
+                          function error(err) {
+                            console.error('[Webview] Bank details close failed:', err);
+                            successMsg.textContent = '✅ Saved! You can close this window now.';
+                          }
+                        );
+                      } else {
+                        console.error('[Webview] MessengerExtensions not available');
+                        successMsg.textContent = '✅ Saved! You can close this window now.';
+                      }
+                    }, 500);
                   } else {
                     throw new Error(data.error || 'Failed to save details');
                   }

@@ -149,6 +149,56 @@ export class FlutterwaveTransferService {
       );
     }
   }
+
+  async validateBankAccount(accountNumber: string, bankCode: string): Promise<{ accountName: string }> {
+    if (!accountNumber || accountNumber.length !== 10) {
+      throw new Error("Account number must be exactly 10 digits");
+    }
+
+    if (!bankCode || bankCode.length < 3) {
+      throw new Error("Invalid bank code");
+    }
+
+    try {
+      console.log(`[Flutterwave] Validating account ${accountNumber} at bank ${bankCode}`);
+      
+      const response = await this.client.post<{
+        status: string;
+        message: string;
+        data: {
+          account_number: string;
+          account_name: string;
+        };
+      }>("/accounts/resolve", {
+        account_number: accountNumber,
+        account_bank: bankCode,
+      });
+
+      if (response.data.status !== "success" || !response.data.data?.account_name) {
+        throw new Error(response.data.message || "Could not verify account");
+      }
+
+      console.log(`[Flutterwave] Account validated: ${response.data.data.account_name}`);
+
+      return {
+        accountName: response.data.data.account_name,
+      };
+    } catch (error: any) {
+      console.error("[Flutterwave] Error validating account:", {
+        accountNumber: `***${accountNumber.slice(-4)}`,
+        bankCode,
+        message: error.message,
+        response: error.response?.data,
+      });
+
+      const errorMsg = error.response?.data?.message || error.message;
+      if (errorMsg.includes("not found") || errorMsg.includes("invalid")) {
+        throw new Error("Account not found. Please check the account number and bank.");
+      }
+
+      throw new Error(errorMsg || "Failed to validate account");
+    }
+  }
 }
 
 export const flutterwaveTransferService = new FlutterwaveTransferService();
