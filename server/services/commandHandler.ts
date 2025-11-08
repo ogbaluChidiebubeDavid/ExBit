@@ -945,9 +945,13 @@ class CommandHandler {
         messengerUserId: user.id,
         blockchain: data.blockchain,
         token: data.token,
-        cryptoAmount: data.amount,
-        nairaAmount: data.totalNaira,
-        fee: data.platformFee,
+        amount: data.amount, // Total crypto sold
+        nairaAmount: data.totalNaira, // Total NGN before fees
+        exchangeRate: data.rate, // NGN per token
+        platformFee: "0", // No crypto fee, only NGN fee
+        platformFeeNaira: data.platformFee, // NGN platform fee
+        netAmount: data.amount, // Net crypto (same as amount, no crypto fee)
+        netNairaAmount: data.netAmount, // Net NGN after fees (sent to bank)
         bankName: data.bankName,
         accountNumber: data.accountNumber,
         accountName: data.accountName,
@@ -962,7 +966,9 @@ class CommandHandler {
         blockchain: data.blockchain,
         token: data.token,
         amount: (-parseFloat(data.amount)).toString(), // Negative to reduce balance
-        txHash: `SELL_${sellOrder.id}`, // Reference to sell order
+        toAddress: user.walletAddresses[data.blockchain.toLowerCase()], // User's wallet
+        fromAddress: "QUIDAX_SELL", // Indicate this is a sell transaction
+        transactionHash: `SELL_${sellOrder.id}`, // Reference to sell order
         status: "confirmed",
       });
 
