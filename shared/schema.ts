@@ -3,6 +3,18 @@ import { pgTable, text, varchar, decimal, timestamp, json, boolean } from "drizz
 import { createInsertSchema } from "drizzle-zod";
 import { z } from "zod";
 
+// Type for sell conversation data
+export interface SellConversationData {
+  token: string;
+  blockchain: string;
+  availableAmount?: string;
+  amount?: string;
+  quidaxRate?: string;
+  nairaAmount?: string;
+  platformFee?: string;
+  netAmount?: string;
+}
+
 // Messenger Users - ExBit bot users with custodial wallets
 export const messengerUsers = pgTable("messenger_users", {
   id: varchar("id").primaryKey().default(sql`gen_random_uuid()`),
@@ -24,7 +36,7 @@ export const messengerUsers = pgTable("messenger_users", {
   tempHashedPin: text("temp_hashed_pin"),
   // Sell conversation state
   sellConversationState: text("sell_conversation_state"),
-  sellConversationData: json("sell_conversation_data"),
+  sellConversationData: json("sell_conversation_data").$type<SellConversationData>(),
   // PIN reset state
   pinResetState: text("pin_reset_state"),
   tempHashedNewPin: text("temp_hashed_new_pin"),

@@ -1312,6 +1312,16 @@ class CommandHandler {
       if (user.sellConversationState === "AWAIT_BANK_DETAILS" && user.sellConversationData) {
         const data = user.sellConversationData;
         
+        // Validate required fields
+        if (!data.amount || !data.quidaxRate || !data.netAmount || !data.platformFee) {
+          console.error("[CommandHandler] Missing required sell data fields:", data);
+          await messengerService.sendTextMessage(
+            psid,
+            "❌ Sorry, there was an issue processing your request. Please try /sell again."
+          );
+          return;
+        }
+        
         // Show confirmation message with exchange rate
         await messengerService.sendTextMessage(
           psid,

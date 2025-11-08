@@ -323,7 +323,7 @@ export async function registerRoutes(app: Express): Promise<Server> {
             * { box-sizing: border-box; margin: 0; padding: 0; }
             body {
               font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, sans-serif;
-              background: linear-gradient(135deg, #10b981 0%, #059669 100%);
+              background: linear-gradient(135deg, #3b82f6 0%, #2563eb 100%);
               min-height: 100vh;
               display: flex;
               align-items: center;
@@ -367,7 +367,7 @@ export async function registerRoutes(app: Express): Promise<Server> {
             }
             .balance-item.selected {
               background: #dbeafe;
-              border-color: #10b981;
+              border-color: #3b82f6;
             }
             .balance-item .token-name {
               font-weight: 700;
@@ -383,7 +383,7 @@ export async function registerRoutes(app: Express): Promise<Server> {
             .balance-item .balance-amount {
               font-size: 20px;
               font-weight: 600;
-              color: #10b981;
+              color: #3b82f6;
             }
             .form-group {
               margin-bottom: 20px;
@@ -405,12 +405,12 @@ export async function registerRoutes(app: Express): Promise<Server> {
             }
             input:focus {
               outline: none;
-              border-color: #10b981;
+              border-color: #3b82f6;
             }
             .btn {
               width: 100%;
               padding: 14px;
-              background: linear-gradient(135deg, #10b981 0%, #059669 100%);
+              background: linear-gradient(135deg, #3b82f6 0%, #2563eb 100%);
               color: white;
               border: none;
               border-radius: 8px;
@@ -440,7 +440,7 @@ export async function registerRoutes(app: Express): Promise<Server> {
             }
             .max-btn {
               display: inline-block;
-              background: #10b981;
+              background: #3b82f6;
               color: white;
               padding: 6px 12px;
               border-radius: 6px;
@@ -450,11 +450,11 @@ export async function registerRoutes(app: Express): Promise<Server> {
               margin-left: 8px;
             }
             .max-btn:hover {
-              background: #059669;
+              background: #2563eb;
             }
             #selectedBalance {
               display: none;
-              background: linear-gradient(135deg, #10b981 0%, #059669 100%);
+              background: linear-gradient(135deg, #3b82f6 0%, #2563eb 100%);
               color: white;
               padding: 16px;
               border-radius: 12px;
@@ -1103,10 +1103,20 @@ export async function registerRoutes(app: Express): Promise<Server> {
       }
       
       // Get Quidax market price
-      const { quidaxService } = await import("./services/quidaxService");
+      const { quidaxService, QUIDAX_SUPPORTED_TOKENS } = await import("./services/quidaxService");
+      const tokenUpper = data.token.toUpperCase();
+      
+      // Check if token is supported
+      if (!(tokenUpper in QUIDAX_SUPPORTED_TOKENS)) {
+        return res.status(400).json({
+          success: false,
+          error: `Token ${data.token} is not supported for selling.`
+        });
+      }
+      
       let quidaxRate;
       try {
-        quidaxRate = await quidaxService.getMarketPrice(data.token.toUpperCase());
+        quidaxRate = await quidaxService.getMarketPrice(tokenUpper as keyof typeof QUIDAX_SUPPORTED_TOKENS);
       } catch (error) {
         console.error("[Webview] Failed to fetch Quidax price:", error);
         return res.status(500).json({
