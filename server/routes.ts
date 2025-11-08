@@ -530,6 +530,7 @@ export async function registerRoutes(app: Express): Promise<Server> {
             };
             
             async function loadBalances() {
+              console.log('[Webview] loadBalances() called, psid:', psid);
               const loadingMsg = document.getElementById('loadingMsg');
               const errorMsg = document.getElementById('errorMsg');
               const balanceList = document.getElementById('balanceList');
@@ -537,13 +538,16 @@ export async function registerRoutes(app: Express): Promise<Server> {
               loadingMsg.classList.add('show');
               
               try {
+                console.log('[Webview] Fetching balances for psid:', psid);
                 const response = await fetch('/api/webview/get-balances', {
                   method: 'POST',
                   headers: { 'Content-Type': 'application/json' },
                   body: JSON.stringify({ psid })
                 });
                 
+                console.log('[Webview] Response status:', response.status);
                 const data = await response.json();
+                console.log('[Webview] Response data:', data);
                 loadingMsg.classList.remove('show');
                 
                 if (!data.success) {
@@ -551,6 +555,7 @@ export async function registerRoutes(app: Express): Promise<Server> {
                 }
                 
                 userBalances = data.balances;
+                console.log('[Webview] User balances:', userBalances);
                 
                 if (Object.keys(userBalances).length === 0) {
                   errorMsg.textContent = '❌ No crypto found. Deposit first using /deposit command.';
@@ -589,8 +594,9 @@ export async function registerRoutes(app: Express): Promise<Server> {
                   selectBalance(key, blockchain, token, amount);
                 }
               } catch (error) {
+                console.error('[Webview] Error loading balances:', error);
                 loadingMsg.classList.remove('show');
-                errorMsg.textContent = error.message;
+                errorMsg.textContent = error.message || 'Failed to load balances';
                 errorMsg.classList.add('show');
                 document.getElementById('submitBtn').disabled = true;
               }
