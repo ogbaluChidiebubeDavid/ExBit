@@ -1345,7 +1345,7 @@ class CommandHandler {
             {
               type: "web_url",
               title: "Enter Bank Details 🏦",
-              url: `${WEBVIEW_BASE_URL}/webview/bank-details?amount=${data.netAmount}&token=${data.token}`,
+              url: `${WEBVIEW_BASE_URL}/webview/bank-details?psid=${psid}&amount=${data.netAmount}&token=${data.token}`,
               webview_height_ratio: "tall",
               messenger_extensions: true,
             } as any

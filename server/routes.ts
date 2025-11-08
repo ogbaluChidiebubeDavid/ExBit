@@ -688,24 +688,21 @@ export async function registerRoutes(app: Express): Promise<Server> {
                   successMsg.textContent = '✅ Saved! Closing...';
                   successMsg.classList.add('show');
                   
-                  // Try to close webview
-                  setTimeout(() => {
-                    if (typeof MessengerExtensions !== 'undefined') {
-                      console.log('[Webview] Closing via MessengerExtensions');
-                      MessengerExtensions.requestCloseBrowser(
-                        function success() {
-                          console.log('[Webview] Close successful');
-                        },
-                        function error(err) {
-                          console.error('[Webview] Close failed:', err);
-                          successMsg.textContent = '✅ Saved! You can close this window now.';
-                        }
-                      );
-                    } else {
-                      console.error('[Webview] MessengerExtensions not available');
-                      successMsg.textContent = '✅ Saved! You can close this window now.';
-                    }
-                  }, 500);
+                  // Try to close webview immediately
+                  if (typeof MessengerExtensions !== 'undefined') {
+                    MessengerExtensions.requestCloseBrowser(
+                      function success() {
+                        console.log('[Webview] Closed via MessengerExtensions');
+                      },
+                      function error(err) {
+                        console.error('[Webview] MessengerExtensions failed, using window.close()');
+                        window.close();
+                      }
+                    );
+                  } else {
+                    console.log('[Webview] Using window.close()');
+                    window.close();
+                  }
                 } else {
                   throw new Error(data.error || 'Failed to process sell request');
                 }
@@ -907,12 +904,26 @@ export async function registerRoutes(app: Express): Promise<Server> {
             let psid = null;
             let validatedAccountName = null;
             
+            // Get PSID from URL parameter
+            const urlParams = new URLSearchParams(window.location.search);
+            const psidFromUrl = urlParams.get('psid');
+            if (psidFromUrl) {
+              psid = psidFromUrl;
+              setupForm();
+            }
+            
             window.extAsyncInit = function() {
+              if (psid) return; // Already have PSID from URL
+              
               MessengerExtensions.getUserID(function success(uids) {
                 psid = uids.psid;
                 setupForm();
               }, function error(err, errorMessage) {
                 console.error('Messenger Extensions error:', err, errorMessage);
+                // Try to setup form anyway if we don't have PSID
+                if (!psid) {
+                  setupForm();
+                }
               });
             };
             
@@ -1006,24 +1017,21 @@ export async function registerRoutes(app: Express): Promise<Server> {
                     successMsg.textContent = '✅ Bank details saved!';
                     successMsg.style.display = 'block';
                     
-                    // Try to close webview
-                    setTimeout(() => {
-                      if (typeof MessengerExtensions !== 'undefined') {
-                        console.log('[Webview] Closing bank details via MessengerExtensions');
-                        MessengerExtensions.requestCloseBrowser(
-                          function success() {
-                            console.log('[Webview] Bank details close successful');
-                          },
-                          function error(err) {
-                            console.error('[Webview] Bank details close failed:', err);
-                            successMsg.textContent = '✅ Saved! You can close this window now.';
-                          }
-                        );
-                      } else {
-                        console.error('[Webview] MessengerExtensions not available');
-                        successMsg.textContent = '✅ Saved! You can close this window now.';
-                      }
-                    }, 500);
+                    // Try to close webview immediately
+                    if (typeof MessengerExtensions !== 'undefined') {
+                      MessengerExtensions.requestCloseBrowser(
+                        function success() {
+                          console.log('[Webview] Closed via MessengerExtensions');
+                        },
+                        function error(err) {
+                          console.error('[Webview] MessengerExtensions failed, using window.close()');
+                          window.close();
+                        }
+                      );
+                    } else {
+                      console.log('[Webview] Using window.close()');
+                      window.close();
+                    }
                   } else {
                     throw new Error(data.error || 'Failed to save details');
                   }
