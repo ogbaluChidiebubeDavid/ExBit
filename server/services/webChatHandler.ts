@@ -204,6 +204,98 @@ class WebChatHandler {
     const result = await flutterwaveService.validateBankAccount(accountNumber, bankName);
     return { accountName: result.accountName };
   }
+
+  // Save bank details and return swap data for signing
+  async saveBankDetails(sessionId: string, bankName: string, accountNumber: string, accountName: string): Promise<{ swapData: any }> {
+    // Get user
+    const [user] = await db
+      .select()
+      .from(webUsers)
+      .where(eq(webUsers.sessionId, sessionId))
+      .limit(1);
+
+    if (!user || !user.swapData) {
+      throw new Error("Invalid session or no swap in progress");
+    }
+
+    // Update user with bank details
+    await db.update(webUsers).set({
+      swapState: "awaiting_signature",
+      bankDetails: {
+        bankName,
+        accountNumber,
+        accountName,
+      },
+    }).where(eq(webUsers.id, user.id));
+
+    return { swapData: user.swapData };
+  }
+
+  // Process swap after transaction is signed
+  async processSwap(sessionId: string, txHash: string): Promise<{ success: boolean }> {
+    // Get user and their swap data
+    const [user] = await db
+      .select()
+      .from(webUsers)
+      .where(eq(webUsers.sessionId, sessionId))
+      .limit(1);
+
+    if (!user || !user.swapData || !user.bankDetails) {
+      throw new Error("Invalid session or incomplete swap data");
+    }
+
+    const swapData = user.swapData as any;
+    const bankDetails = user.bankDetails as any;
+
+    try {
+      // Create web transaction record
+      const [transaction] = await db.insert(webTransactions).values({
+        webUserId: user.id,
+        blockchain: swapData.blockchain,
+        token: swapData.token,
+        amount: swapData.amount,
+        nairaAmount: swapData.nairaAmount,
+        platformFee: swapData.platformFee,
+        netAmount: swapData.netAmount,
+        bankName: bankDetails.bankName,
+        accountNumber: bankDetails.accountNumber,
+        accountName: bankDetails.accountName,
+        txHash,
+        status: "processing",
+      }).returning();
+
+      console.log(`[WebChat] Processing swap for transaction ${transaction.id}, txHash: ${txHash}`);
+
+      // Trigger Flutterwave payout
+      const transferResult = await flutterwaveService.transferFunds(
+        parseFloat(swapData.netAmount),
+        bankDetails.accountNumber,
+        bankDetails.bankName,
+        bankDetails.accountName,
+        `ExBit swap ${transaction.id}`
+      );
+
+      // Update transaction with Flutterwave reference
+      await db.update(webTransactions).set({
+        flutterwaveRef: transferResult.reference,
+        status: "completed",
+      }).where(eq(webTransactions.id, transaction.id));
+
+      // Update user state
+      await db.update(webUsers).set({
+        swapState: null,
+        swapData: null,
+        bankDetails: null,
+      }).where(eq(webUsers.id, user.id));
+
+      console.log(`[WebChat] Swap completed successfully. TX: ${txHash}, Flutterwave: ${transferResult.reference}`);
+
+      return { success: true };
+    } catch (error: any) {
+      console.error("[WebChat] Swap processing failed:", error);
+      throw new Error("Failed to process Naira payout: " + error.message);
+    }
+  }
 }
 
 export const webChatHandler = new WebChatHandler();

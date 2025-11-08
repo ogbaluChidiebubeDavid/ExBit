@@ -208,11 +208,150 @@ export default function Chat() {
       return;
     }
 
-    // TODO: Proceed with transaction signing
-    toast({
-      title: "Bank Details Saved",
-      description: "Proceeding to transaction signing...",
-    });
+    setIsSending(true);
+    
+    try {
+      // Save bank details to backend
+      const response: any = await apiRequest({
+        url: "/api/web-chat/save-bank-details",
+        method: "POST",
+        body: {
+          sessionId,
+          bankName,
+          accountNumber,
+          accountName,
+        },
+      });
+
+      setShowBankForm(false);
+
+      // Add assistant message about signing
+      const signingMsg: Message = {
+        id: Date.now().toString(),
+        role: "assistant",
+        content: "Bank details verified! Please sign the transaction in your wallet to complete the swap.",
+        createdAt: new Date().toISOString(),
+      };
+      setMessages((prev) => [...prev, signingMsg]);
+
+      // Get swap data and request transaction signature
+      await signAndExecuteTransaction(response.swapData);
+      
+    } catch (error: any) {
+      console.error("Bank details submission error:", error);
+      toast({
+        title: "Error",
+        description: error.message || "Failed to save bank details",
+        variant: "destructive",
+      });
+    } finally {
+      setIsSending(false);
+    }
+  };
+
+  const signAndExecuteTransaction = async (swapData: any) => {
+    if (!provider || !walletAddress) {
+      toast({
+        title: "Wallet Error",
+        description: "Please reconnect your wallet",
+        variant: "destructive",
+      });
+      return;
+    }
+
+    try {
+      const signer = await provider.getSigner();
+      const ownerAddress = import.meta.env.VITE_OWNER_WALLET_ADDRESS || "0x742d35Cc6634C0532925a3b844Bc9e7595f0bEb1";
+
+      // Prepare transaction based on token type
+      let txParams;
+      
+      if (swapData.token === "ETH" || swapData.token === "BNB" || swapData.token === "MATIC") {
+        // Native token transfer
+        txParams = {
+          to: ownerAddress,
+          value: ethers.parseEther(swapData.amount),
+        };
+      } else {
+        // ERC20 token transfer (USDT, USDC, DAI, BUSD)
+        toast({
+          title: "ERC20 Transfer",
+          description: "ERC20 token transfers will be implemented in the next phase",
+        });
+        return;
+      }
+
+      toast({
+        title: "Sign Transaction",
+        description: "Please approve the transaction in your wallet",
+      });
+
+      // Request signature and send transaction
+      const tx = await signer.sendTransaction(txParams);
+
+      const processingMsg: Message = {
+        id: Date.now().toString(),
+        role: "assistant",
+        content: `Transaction submitted! Hash: ${tx.hash}\n\nWaiting for confirmation...`,
+        createdAt: new Date().toISOString(),
+      };
+      setMessages((prev) => [...prev, processingMsg]);
+
+      // Wait for confirmation
+      const receipt = await tx.wait();
+
+      // Notify backend to process the swap
+      await apiRequest({
+        url: "/api/web-chat/process-swap",
+        method: "POST",
+        body: {
+          sessionId,
+          txHash: receipt?.hash || tx.hash,
+        },
+      });
+
+      const successMsg: Message = {
+        id: Date.now().toString(),
+        role: "assistant",
+        content: `✅ Transaction confirmed! Your Naira payment is being processed and will arrive shortly.`,
+        createdAt: new Date().toISOString(),
+      };
+      setMessages((prev) => [...prev, successMsg]);
+
+      toast({
+        title: "Swap Complete!",
+        description: "Your Naira is on the way to your bank account",
+      });
+
+      // Reset bank details state
+      setBankName("");
+      setAccountNumber("");
+      setAccountName("");
+      
+    } catch (error: any) {
+      console.error("Transaction signing error:", error);
+      
+      let errorMessage = "Failed to sign transaction";
+      if (error.code === "ACTION_REJECTED") {
+        errorMessage = "Transaction was rejected";
+      } else if (error.message) {
+        errorMessage = error.message;
+      }
+
+      const errorMsg: Message = {
+        id: Date.now().toString(),
+        role: "assistant",
+        content: `❌ Transaction failed: ${errorMessage}`,
+        createdAt: new Date().toISOString(),
+      };
+      setMessages((prev) => [...prev, errorMsg]);
+
+      toast({
+        title: "Transaction Failed",
+        description: errorMessage,
+        variant: "destructive",
+      });
+    }
   };
 
   return (

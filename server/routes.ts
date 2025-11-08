@@ -2030,6 +2030,44 @@ export async function registerRoutes(app: Express): Promise<Server> {
     }
   });
 
+  // Save bank details and return swap data
+  app.post("/api/web-chat/save-bank-details", async (req, res) => {
+    try {
+      const { sessionId, bankName, accountNumber, accountName } = req.body;
+      
+      if (!sessionId || !bankName || !accountNumber || !accountName) {
+        return res.status(400).json({ error: "All bank details are required" });
+      }
+
+      const { webChatHandler } = await import("./services/webChatHandler");
+      const result = await webChatHandler.saveBankDetails(sessionId, bankName, accountNumber, accountName);
+      
+      res.json(result);
+    } catch (error: any) {
+      console.error("[WebChat] Error saving bank details:", error);
+      res.status(500).json({ error: error.message || "Failed to save bank details" });
+    }
+  });
+
+  // Process swap after transaction is signed
+  app.post("/api/web-chat/process-swap", async (req, res) => {
+    try {
+      const { sessionId, txHash } = req.body;
+      
+      if (!sessionId || !txHash) {
+        return res.status(400).json({ error: "Session ID and transaction hash are required" });
+      }
+
+      const { webChatHandler } = await import("./services/webChatHandler");
+      const result = await webChatHandler.processSwap(sessionId, txHash);
+      
+      res.json(result);
+    } catch (error: any) {
+      console.error("[WebChat] Error processing swap:", error);
+      res.status(500).json({ error: error.message || "Failed to process swap" });
+    }
+  });
+
   const httpServer = createServer(app);
 
   return httpServer;
