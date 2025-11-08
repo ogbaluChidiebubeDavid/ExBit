@@ -508,23 +508,33 @@ export async function registerRoutes(app: Express): Promise<Server> {
             // Extract PSID from URL parameters
             const urlParams = new URLSearchParams(window.location.search);
             const psidFromUrl = urlParams.get('psid');
+            console.log('[Webview] PSID from URL:', psidFromUrl);
+            
+            // Try URL parameter first (more reliable)
+            if (psidFromUrl) {
+              psid = psidFromUrl;
+              console.log('[Webview] Using PSID from URL, loading balances...');
+              loadBalances();
+            }
             
             window.extAsyncInit = function() {
+              // If we already have PSID from URL, skip Messenger Extensions
+              if (psid) {
+                console.log('[Webview] Already have PSID from URL, skipping Messenger Extensions');
+                return;
+              }
+              
               MessengerExtensions.getContext('${process.env.FACEBOOK_APP_ID}',
                 async function success(result) {
+                  console.log('[Webview] Got PSID from Messenger Extensions:', result.psid);
                   psid = result.psid;
                   await loadBalances();
                 },
                 function error(err, errorMessage) {
-                  console.error('Messenger Extensions error:', err, errorMessage);
-                  // Fallback to PSID from URL parameter
-                  psid = psidFromUrl;
-                  if (psid) {
-                    loadBalances();
-                  } else {
-                    document.getElementById('errorMsg').textContent = 'Failed to get user context';
-                    document.getElementById('errorMsg').classList.add('show');
-                  }
+                  console.error('[Webview] Messenger Extensions error:', err, errorMessage);
+                  document.getElementById('errorMsg').textContent = 'Failed to get user context. Please try again.';
+                  document.getElementById('errorMsg').classList.add('show');
+                  document.getElementById('loadingMsg').classList.remove('show');
                 }
               );
             };
