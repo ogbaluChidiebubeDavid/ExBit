@@ -66,11 +66,12 @@ export default function Chat() {
       setWalletAddress(address);
 
       // Create or get session from backend
-      const response: any = await apiRequest(
+      const res = await apiRequest(
         "POST",
         "/api/web-chat/connect",
         { walletAddress: address }
       );
+      const response: any = await res.json();
 
       setSessionId(response.sessionId);
       setMessages(response.messages || []);
@@ -120,7 +121,7 @@ export default function Chat() {
 
     try {
       // Send message to backend
-      const response: any = await apiRequest(
+      const res = await apiRequest(
         "POST",
         "/api/web-chat/message",
         {
@@ -128,6 +129,7 @@ export default function Chat() {
           message: userMessage,
         }
       );
+      const response: any = await res.json();
 
       // Add assistant response
       setMessages((prev) => [...prev, response.assistantMessage]);
@@ -171,7 +173,7 @@ export default function Chat() {
     setAccountName("");
 
     try {
-      const response: any = await apiRequest(
+      const res = await apiRequest(
         "POST",
         "/api/web-chat/validate-bank",
         {
@@ -180,6 +182,7 @@ export default function Chat() {
           accountNumber,
         }
       );
+      const response: any = await res.json();
 
       setAccountName(response.accountName);
       toast({
@@ -212,7 +215,7 @@ export default function Chat() {
     
     try {
       // Save bank details to backend
-      const response: any = await apiRequest(
+      const res = await apiRequest(
         "POST",
         "/api/web-chat/save-bank-details",
         {
@@ -222,6 +225,7 @@ export default function Chat() {
           accountName,
         }
       );
+      const response: any = await res.json();
 
       setShowBankForm(false);
 
