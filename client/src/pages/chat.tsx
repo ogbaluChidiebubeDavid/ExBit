@@ -66,11 +66,11 @@ export default function Chat() {
       setWalletAddress(address);
 
       // Create or get session from backend
-      const response: any = await apiRequest({
-        url: "/api/web-chat/connect",
-        method: "POST",
-        body: { walletAddress: address },
-      });
+      const response: any = await apiRequest(
+        "POST",
+        "/api/web-chat/connect",
+        { walletAddress: address }
+      );
 
       setSessionId(response.sessionId);
       setMessages(response.messages || []);
@@ -120,14 +120,14 @@ export default function Chat() {
 
     try {
       // Send message to backend
-      const response: any = await apiRequest({
-        url: "/api/web-chat/message",
-        method: "POST",
-        body: {
+      const response: any = await apiRequest(
+        "POST",
+        "/api/web-chat/message",
+        {
           sessionId,
           message: userMessage,
-        },
-      });
+        }
+      );
 
       // Add assistant response
       setMessages((prev) => [...prev, response.assistantMessage]);
@@ -171,15 +171,15 @@ export default function Chat() {
     setAccountName("");
 
     try {
-      const response: any = await apiRequest({
-        url: "/api/web-chat/validate-bank",
-        method: "POST",
-        body: {
+      const response: any = await apiRequest(
+        "POST",
+        "/api/web-chat/validate-bank",
+        {
           sessionId,
           bankName,
           accountNumber,
-        },
-      });
+        }
+      );
 
       setAccountName(response.accountName);
       toast({
@@ -212,16 +212,16 @@ export default function Chat() {
     
     try {
       // Save bank details to backend
-      const response: any = await apiRequest({
-        url: "/api/web-chat/save-bank-details",
-        method: "POST",
-        body: {
+      const response: any = await apiRequest(
+        "POST",
+        "/api/web-chat/save-bank-details",
+        {
           sessionId,
           bankName,
           accountNumber,
           accountName,
-        },
-      });
+        }
+      );
 
       setShowBankForm(false);
 
@@ -380,14 +380,14 @@ export default function Chat() {
       const receipt = await tx.wait();
 
       // Notify backend to process the swap
-      await apiRequest({
-        url: "/api/web-chat/process-swap",
-        method: "POST",
-        body: {
+      await apiRequest(
+        "POST",
+        "/api/web-chat/process-swap",
+        {
           sessionId,
           txHash: receipt?.hash || tx.hash,
-        },
-      });
+        }
+      );
 
       const successMsg: Message = {
         id: Date.now().toString(),
