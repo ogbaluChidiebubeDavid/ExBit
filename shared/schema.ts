@@ -9,7 +9,7 @@ export interface SellConversationData {
   blockchain: string;
   availableAmount?: string;
   amount?: string;
-  quidaxRate?: string;
+  nairaRate?: string;
   nairaAmount?: string;
   platformFee?: string;
   netAmount?: string;
@@ -74,12 +74,10 @@ export const transactions = pgTable("transactions", {
   bankName: text("bank_name").notNull(),
   accountNumber: text("account_number").notNull(),
   accountName: text("account_name"),
-  // Blockchain transaction hash (incoming crypto deposit)
+  // Blockchain transaction hash (incoming deposit or outgoing crypto transfer to owner)
   depositTransactionHash: text("deposit_transaction_hash"),
-  // Quidax order ID when selling crypto
-  quidaxOrderId: text("quidax_order_id"),
-  // Quidax withdrawal ID when sending Naira to bank
-  quidaxWithdrawalId: text("quidax_withdrawal_id"),
+  // Flutterwave transfer reference when sending Naira to user's bank
+  flutterwaveReference: text("flutterwave_reference"),
   status: text("status").notNull().default("pending"),
   createdAt: timestamp("created_at").defaultNow().notNull(),
   completedAt: timestamp("completed_at"),

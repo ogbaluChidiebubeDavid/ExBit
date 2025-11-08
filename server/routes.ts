@@ -1102,23 +1102,15 @@ export async function registerRoutes(app: Express): Promise<Server> {
         });
       }
       
-      // Get Quidax market price
-      const { quidaxService, QUIDAX_SUPPORTED_TOKENS } = await import("./services/quidaxService");
+      // Get CoinGecko market price
+      const { priceService } = await import("./services/priceService");
       const tokenUpper = data.token.toUpperCase();
       
-      // Check if token is supported
-      if (!(tokenUpper in QUIDAX_SUPPORTED_TOKENS)) {
-        return res.status(400).json({
-          success: false,
-          error: `Token ${data.token} is not supported for selling.`
-        });
-      }
-      
-      let quidaxRate;
+      let nairaRate;
       try {
-        quidaxRate = await quidaxService.getMarketPrice(tokenUpper as keyof typeof QUIDAX_SUPPORTED_TOKENS);
+        nairaRate = await priceService.getTokenPriceInNaira(tokenUpper);
       } catch (error) {
-        console.error("[Webview] Failed to fetch Quidax price:", error);
+        console.error("[Webview] Failed to fetch CoinGecko price:", error);
         return res.status(500).json({
           success: false,
           error: "Sorry, I couldn't fetch the current market price. Please try again in a moment."
@@ -1127,7 +1119,7 @@ export async function registerRoutes(app: Express): Promise<Server> {
       
       // Calculate amounts
       const amount = parseFloat(data.amount);
-      const nairaAmount = amount * quidaxRate;
+      const nairaAmount = amount * nairaRate;
       const platformFee = nairaAmount * 0.001; // 0.1% fee
       const netAmount = nairaAmount - platformFee;
       
@@ -1140,7 +1132,7 @@ export async function registerRoutes(app: Express): Promise<Server> {
             blockchain: data.blockchain,
             token: data.token,
             amount: data.amount,
-            quidaxRate: quidaxRate.toString(),
+            nairaRate: nairaRate.toString(),
             nairaAmount: nairaAmount.toString(),
             platformFee: platformFee.toString(),
             netAmount: netAmount.toString(),

@@ -2,7 +2,6 @@ import { messengerService } from "./messengerService";
 import { walletService, type ChainKey, SUPPORTED_CHAINS } from "./walletService";
 import { blockchainMonitor } from "./blockchainMonitor";
 import { pinService } from "./pinService";
-import { quidaxService, type QuidaxToken } from "./quidaxService";
 import { db } from "../db";
 import { messengerUsers, transactions, deposits } from "@shared/schema";
 import { eq, and } from "drizzle-orm";
@@ -732,19 +731,11 @@ class CommandHandler {
     }
 
     try {
-      // Get real-time market price from Quidax
-      const quidaxToken = data.token.toUpperCase() as QuidaxToken;
-      const rate = await quidaxService.getMarketPrice(quidaxToken);
+      // Price fetching is now handled by the webview using CoinGecko
+      // This function is kept for backward compatibility but shouldn't be reached
+      // in the current webview-based flow
       
-      const totalNaira = amount * rate;
-      const platformFee = Math.max(totalNaira * 0.001, 143); // 0.1% or ₦143 minimum
-      const netAmount = totalNaira - platformFee;
-
       data.amount = amount.toString();
-      data.rate = rate.toString();
-      data.totalNaira = totalNaira.toString();
-      data.platformFee = platformFee.toString();
-      data.netAmount = netAmount.toString();
 
       await db
         .update(messengerUsers)
@@ -776,10 +767,10 @@ class CommandHandler {
         ]
       );
     } catch (error) {
-      console.error("[CommandHandler] Error fetching Quidax price:", error);
+      console.error("[CommandHandler] Error in sell amount handler:", error);
       await messengerService.sendTextMessage(
         senderId,
-        "Sorry, I couldn't fetch the current market price. Please try again in a moment or type 'cancel' to stop."
+        "Sorry, something went wrong. Please try again or type 'cancel' to stop."
       );
     }
   }
@@ -850,15 +841,11 @@ class CommandHandler {
 
     data.accountName = accountName.trim();
 
-    const rate = 1430;
-    const totalNaira = parseFloat(data.amount) * rate;
-    const platformFee = totalNaira * 0.001;
-    const netAmount = totalNaira - platformFee;
-
-    data.rate = rate.toString();
-    data.totalNaira = totalNaira.toString();
-    data.platformFee = platformFee.toString();
-    data.netAmount = netAmount.toString();
+    // Use the nairaRate already fetched from CoinGecko in the webview
+    const rate = parseFloat(data.nairaRate);
+    const totalNaira = parseFloat(data.nairaAmount);
+    const platformFee = parseFloat(data.platformFee);
+    const netAmount = parseFloat(data.netAmount);
 
     await db
       .update(messengerUsers)
@@ -872,7 +859,7 @@ class CommandHandler {
 
     await messengerService.sendTextMessage(
       senderId,
-      `📋 Transaction Summary:\n\nSelling: ${data.amount} ${data.token} (${chainName})\nRate: ₦${rate}/${data.token}\nTotal: ₦${totalNaira.toFixed(2)}\nPlatform Fee (0.1%): ₦${platformFee.toFixed(2)}\n\n💰 You receive: ₦${netAmount.toFixed(2)}\n\n🏦 Bank Details:\n${data.bankName}\n${data.accountNumber}\n${data.accountName}\n\n🔐 Enter your 4-digit PIN to confirm:`
+      `📋 Transaction Summary:\n\nSelling: ${data.amount} ${data.token} (${chainName})\nRate: ₦${rate.toFixed(2)}/${data.token}\nTotal: ₦${totalNaira.toFixed(2)}\nPlatform Fee (0.1%): ₦${platformFee.toFixed(2)}\n\n💰 You receive: ₦${netAmount.toFixed(2)}\n\n🏦 Bank Details:\n${data.bankName}\n${data.accountNumber}\n${data.accountName}\n\n🔐 Enter your 4-digit PIN to confirm:`
     );
   }
 
@@ -907,8 +894,8 @@ class CommandHandler {
     let negativeDepositId: string | null = null;
 
     try {
-      // Execute Quidax sell and withdrawal
-      const quidaxToken = data.token.toUpperCase() as QuidaxToken;
+      // Execute Web3 transfer + Flutterwave withdrawal
+      const tokenSymbol = data.token.toUpperCase();
       const amount = parseFloat(data.amount);
       const netAmount = parseFloat(data.netAmount);
       
@@ -946,57 +933,66 @@ class CommandHandler {
           token: data.token,
           amount: (-amount).toString(), // Negative to reduce balance
           toAddress: user.walletAddresses[data.blockchain.toLowerCase()], // User's wallet
-          fromAddress: "PENDING_SELL", // Will update to QUIDAX_SELL after success
-          transactionHash: `PENDING_SELL_${Date.now()}`, // Temporary, will update after Quidax
+          fromAddress: "PENDING_SELL", // Will update to EXBIT_SWAP after success
+          transactionHash: `PENDING_SELL_${Date.now()}`, // Temporary, will update with blockchain TX hash
           status: "confirmed",
         }).returning({ id: deposits.id });
 
         return negativeDeposit.id;
       });
 
-      // Step 1: Create instant sell order on Quidax
+      // Step 1: Send crypto from user's custodial wallet to owner wallet
       await messengerService.sendTextMessage(
         senderId,
-        `🔄 Step 1/3: Creating sell order on Quidax...`
+        `🔄 Step 1/2: Transferring ${data.amount} ${tokenSymbol} to ExBit...`
       );
 
-      const sellOrder = await quidaxService.createInstantSellOrder(quidaxToken, amount);
+      const { web3TransferService } = await import("./web3TransferService");
+      const cryptoTxHash = await web3TransferService.sendCryptoToOwner(
+        user.encryptedKeys,
+        data.blockchain,
+        tokenSymbol,
+        data.amount
+      );
 
-      // Step 2: Confirm the sell order
+      console.log(`[CommandHandler] Crypto transfer successful:`, {
+        blockchain: data.blockchain,
+        token: tokenSymbol,
+        amount: data.amount,
+        txHash: cryptoTxHash,
+      });
+
+      // Step 2: Send Naira to user's bank via Flutterwave
       await messengerService.sendTextMessage(
         senderId,
-        `🔄 Step 2/3: Confirming trade...`
+        `🔄 Step 2/2: Sending ₦${netAmount.toFixed(2)} to your bank...`
       );
 
-      await quidaxService.confirmInstantOrder(sellOrder.id);
-
-      // Step 3: Withdraw NGN to bank account
-      await messengerService.sendTextMessage(
-        senderId,
-        `🔄 Step 3/3: Transferring ₦${netAmount.toFixed(2)} to your bank...`
-      );
-
-      const bankCode = quidaxService.getBankCode(data.bankName);
+      const { flutterwaveTransferService } = await import("./flutterwaveTransferService");
+      const { flutterwaveService } = await import("./flutterwaveService");
+      
+      const bankCode = flutterwaveService.getBankCode(data.bankName);
       
       if (!bankCode) {
         throw new Error(`Bank not supported: ${data.bankName}`);
       }
 
-      const withdrawal = await quidaxService.withdrawToBank(
-        Math.floor(netAmount), // Quidax requires integer amounts
+      const transfer = await flutterwaveTransferService.transferToBank(
+        Math.floor(netAmount), // Flutterwave requires integer amounts
         bankCode,
         data.accountNumber,
-        data.accountName
+        data.accountName,
+        `ExBit crypto swap - ${data.amount} ${tokenSymbol}`
       );
 
-      // Step 4: Create transaction record
+      // Step 3: Create transaction record
       await db.insert(transactions).values({
         messengerUserId: user.id,
         blockchain: data.blockchain,
         token: data.token,
         amount: data.amount, // Total crypto sold
-        nairaAmount: data.totalNaira, // Total NGN before fees
-        exchangeRate: data.rate, // NGN per token
+        nairaAmount: data.nairaAmount, // Total NGN before fees
+        exchangeRate: data.nairaRate, // NGN per token
         platformFee: "0", // No crypto fee, only NGN fee
         platformFeeNaira: data.platformFee, // NGN platform fee
         netAmount: data.amount, // Net crypto (same as amount, no crypto fee)
@@ -1004,35 +1000,35 @@ class CommandHandler {
         bankName: data.bankName,
         accountNumber: data.accountNumber,
         accountName: data.accountName,
-        quidaxOrderId: sellOrder.id,
-        quidaxWithdrawalId: withdrawal.id,
+        depositTransactionHash: cryptoTxHash,
+        flutterwaveReference: transfer.reference,
         status: "completed",
       });
 
-      // Step 5: Update negative deposit entry with Quidax order ID (for tracking)
+      // Step 4: Update negative deposit entry with blockchain transaction hash
       await db
         .update(deposits)
         .set({
-          fromAddress: "QUIDAX_SELL",
-          transactionHash: `SELL_${sellOrder.id}`,
+          fromAddress: "EXBIT_SWAP",
+          transactionHash: cryptoTxHash,
         })
         .where(eq(deposits.id, negativeDepositId!));
 
       // Success message
       await messengerService.sendTextMessage(
         senderId,
-        `🎉 Transaction Successful!\n\n✅ Sold: ${data.amount} ${data.token}\n💰 Received: ₦${netAmount.toFixed(2)}\n\n🏦 Sent to:\n${data.bankName}\n${data.accountNumber}\n${data.accountName}\n\n📱 Order ID: ${sellOrder.id}\n🔗 Withdrawal ID: ${withdrawal.id}\n\nType /balance to check your remaining balance.`
+        `🎉 Transaction Successful!\n\n✅ Sold: ${data.amount} ${data.token}\n💰 Received: ₦${netAmount.toFixed(2)}\n\n🏦 Sent to:\n${data.bankName}\n${data.accountNumber}\n${data.accountName}\n\n🔗 Blockchain TX: ${cryptoTxHash.substring(0, 10)}...${cryptoTxHash.substring(cryptoTxHash.length - 8)}\n📱 Flutterwave Ref: ${transfer.reference}\n\nType /balance to check your remaining balance.`
       );
 
     } catch (error: any) {
-      console.error("[CommandHandler] Error processing Quidax transaction:", error);
+      console.error("[CommandHandler] Error processing transaction:", error);
       
-      // ROLLBACK: Delete negative deposit entry if Quidax failed
+      // ROLLBACK: Delete negative deposit entry if transaction failed
       // This restores the user's balance
       if (negativeDepositId) {
         try {
           await db.delete(deposits).where(eq(deposits.id, negativeDepositId));
-          console.log(`[CommandHandler] Rolled back negative deposit ${negativeDepositId} due to Quidax error`);
+          console.log(`[CommandHandler] Rolled back negative deposit ${negativeDepositId} due to transaction error`);
         } catch (rollbackError) {
           console.error("[CommandHandler] CRITICAL: Failed to rollback negative deposit!", rollbackError);
           // This is critical - balance is now incorrect!
@@ -1047,11 +1043,13 @@ class CommandHandler {
       // User-friendly error message
       let errorMsg = "Sorry, the transaction failed. ";
       
-      if (error.message?.includes("Insufficient")) {
-        errorMsg += "There was an issue with the Quidax account balance. Please contact support.";
+      if (error.message?.includes("Insufficient balance")) {
+        errorMsg += "There was an issue with the Flutterwave account balance. Please contact support.";
+      } else if (error.message?.includes("insufficient funds")) {
+        errorMsg += "Not enough balance in your wallet to cover transaction and gas fees.";
       } else if (error.message?.includes("invalid account") || error.message?.includes("Bank account")) {
         errorMsg += "Your bank account details couldn't be validated. Please try again with correct details.";
-      } else if (error.message?.includes("minimum withdrawal")) {
+      } else if (error.message?.includes("minimum")) {
         errorMsg += error.message;
       } else {
         errorMsg += "Please try again or contact support if the issue persists.";
@@ -1313,7 +1311,7 @@ class CommandHandler {
         const data = user.sellConversationData;
         
         // Validate required fields
-        if (!data.amount || !data.quidaxRate || !data.netAmount || !data.platformFee) {
+        if (!data.amount || !data.nairaRate || !data.netAmount || !data.platformFee) {
           console.error("[CommandHandler] Missing required sell data fields:", data);
           await messengerService.sendTextMessage(
             psid,
@@ -1325,7 +1323,7 @@ class CommandHandler {
         // Show confirmation message with exchange rate
         await messengerService.sendTextMessage(
           psid,
-          `💱 Selling ${data.amount} ${data.token}\n\n📊 Exchange Rate: ₦${parseFloat(data.quidaxRate).toLocaleString()} per ${data.token}\n💰 You'll receive: ₦${parseFloat(data.netAmount).toLocaleString()}\n💵 Platform fee (0.1%): ₦${parseFloat(data.platformFee).toLocaleString()}\n\nNext, I need your bank details to complete the transfer.`
+          `💱 Selling ${data.amount} ${data.token}\n\n📊 Exchange Rate: ₦${parseFloat(data.nairaRate).toLocaleString()} per ${data.token}\n💰 You'll receive: ₦${parseFloat(data.netAmount).toLocaleString()}\n💵 Platform fee (0.1%): ₦${parseFloat(data.platformFee).toLocaleString()}\n\nNext, I need your bank details to complete the transfer.`
         );
         
         await new Promise(resolve => setTimeout(resolve, 1500));
