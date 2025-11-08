@@ -8,7 +8,9 @@ import { messengerService } from "./messengerService";
 export const BLOCKCHAIN_CONFIG = {
   ethereum: {
     name: "Ethereum",
-    rpcUrl: process.env.ALCHEMY_ETH_RPC_URL || "https://eth.llamarpc.com",
+    rpcUrl: process.env.ALCHEMY_API_KEY
+      ? `https://eth-mainnet.g.alchemy.com/v2/${process.env.ALCHEMY_API_KEY}`
+      : "https://eth.llamarpc.com",
     chainId: 1,
     blockTime: 12000, // 12 seconds
     confirmations: 12,
@@ -20,7 +22,7 @@ export const BLOCKCHAIN_CONFIG = {
   },
   bsc: {
     name: "BSC",
-    rpcUrl: process.env.ALCHEMY_BSC_RPC_URL || "https://bsc-rpc.publicnode.com",
+    rpcUrl: "https://bsc-rpc.publicnode.com",
     chainId: 56,
     blockTime: 3000, // 3 seconds
     confirmations: 15,
@@ -32,7 +34,9 @@ export const BLOCKCHAIN_CONFIG = {
   },
   polygon: {
     name: "Polygon",
-    rpcUrl: process.env.ALCHEMY_POLYGON_RPC_URL || "https://polygon-rpc.publicnode.com",
+    rpcUrl: process.env.ALCHEMY_API_KEY
+      ? `https://polygon-mainnet.g.alchemy.com/v2/${process.env.ALCHEMY_API_KEY}`
+      : "https://polygon-rpc.publicnode.com",
     chainId: 137,
     blockTime: 2000, // 2 seconds
     confirmations: 128,
@@ -44,7 +48,9 @@ export const BLOCKCHAIN_CONFIG = {
   },
   arbitrum: {
     name: "Arbitrum",
-    rpcUrl: process.env.ALCHEMY_ARB_RPC_URL || "https://arbitrum-one-rpc.publicnode.com",
+    rpcUrl: process.env.ALCHEMY_API_KEY
+      ? `https://arb-mainnet.g.alchemy.com/v2/${process.env.ALCHEMY_API_KEY}`
+      : "https://arbitrum-one-rpc.publicnode.com",
     chainId: 42161,
     blockTime: 250, // 0.25 seconds
     confirmations: 20,
@@ -56,8 +62,8 @@ export const BLOCKCHAIN_CONFIG = {
   },
   base: {
     name: "Base",
-    rpcUrl: process.env.ALCHEMY_BASE_API_KEY 
-      ? `https://base-mainnet.g.alchemy.com/v2/${process.env.ALCHEMY_BASE_API_KEY}`
+    rpcUrl: process.env.ALCHEMY_API_KEY
+      ? `https://base-mainnet.g.alchemy.com/v2/${process.env.ALCHEMY_API_KEY}`
       : "https://base-rpc.publicnode.com",
     chainId: 8453,
     blockTime: 2000, // 2 seconds
