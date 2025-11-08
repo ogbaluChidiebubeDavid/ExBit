@@ -606,6 +606,12 @@ class CommandHandler {
     const state = user.sellConversationState;
     const data = user.sellConversationData || {};
 
+    // Check for cancel command at any point in the flow
+    if (message.toLowerCase().trim() === "cancel") {
+      await this.cancelSellConversation(senderId, user);
+      return;
+    }
+
     switch (state) {
       case "ASK_AMOUNT":
         await this.handleSellAmount(senderId, user, message, data);
