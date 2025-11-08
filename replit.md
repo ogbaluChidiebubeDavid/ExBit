@@ -126,18 +126,19 @@ I prefer simple language and direct instructions. I want iterative development w
 - ✅ **Transaction PIN System**: bcrypt-hashed 4-digit PINs with security questions
 - ✅ **Blockchain Monitoring**: Real-time deposit detection with 3000-block lookback (~100 min)
 - ✅ **Base Chain Integration**: Alchemy API, USDT support, confirmed working
-- ✅ **Database Schema**: Users, deposits, transactions, monitoring state
+- ✅ **Database Schema**: Users, deposits, transactions, monitoring state, pending bank details
 - ✅ **Quidax API Setup**: Secret key configured, ready for sell/withdraw integration
+- ✅ **Alchemy Multi-Chain**: Single API key powers Ethereum, Polygon, Arbitrum, Base (no more RPC errors!)
+- ✅ **Messenger Webviews Infrastructure**: Secure PIN entry and bank details forms with Flutterwave validation
+- ✅ **Webview Button Integration**: Bot sends webview buttons for all sensitive data (no chat history exposure)
 
 ### 🚧 In Progress
-- ⏳ **Messenger Webviews**: HIGH PRIORITY - Need to implement secure data entry for PINs, bank details
 - ⏳ **Quidax Sell/Withdraw**: Integration for crypto-to-Naira conversion and bank transfers
-- ⚠️ **RPC Provider Issues**: Polygon (404 errors), Arbitrum (rate limits) - need Alchemy integration
 
 ### 📋 Next Steps
-- **Immediate**: Implement Messenger webviews for sensitive data (security remediation)
-- **Next**: Complete Quidax sell/withdraw flow
-- **Then**: Fix Polygon/Arbitrum RPC providers (consider Alchemy for all chains)
+- **Immediate**: Complete Quidax sell/withdraw flow
+- **Next**: Test complete user flow (deposit → sell → bank transfer)
+- **Then**: Add beneficiary storage for saved bank accounts
 
 ### Testing Phase (Weeks 5-8)
 - Test with friends/family

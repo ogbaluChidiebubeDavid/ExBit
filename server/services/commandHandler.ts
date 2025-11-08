@@ -5,21 +5,28 @@ import { pinService } from "./pinService";
 import { db } from "../db";
 import { messengerUsers } from "@shared/schema";
 import { eq } from "drizzle-orm";
+import { storage } from "../storage";
+
+// Get webview domain from environment (use REPLIT_DEV_DOMAIN for development)
+const WEBVIEW_DOMAIN = process.env.REPLIT_DEV_DOMAIN || process.env.REPL_SLUG + '.' + process.env.REPL_OWNER + '.repl.co';
+const WEBVIEW_BASE_URL = `https://${WEBVIEW_DOMAIN}`;
 
 interface MessageEvent {
   sender: { id: string };
   message: { text?: string; quick_reply?: { payload: string } };
+  postback?: { payload: string };
 }
 
 class CommandHandler {
-  // Process incoming message
+  // Process incoming message or postback (from webviews)
   async handleMessage(event: MessageEvent): Promise<void> {
     const senderId = event.sender.id;
-    const messageText = event.message.text?.trim() || "";
-    const quickReplyPayload = event.message.quick_reply?.payload;
+    const messageText = event.message?.text?.trim() || "";
+    const quickReplyPayload = event.message?.quick_reply?.payload;
+    const postbackPayload = event.postback?.payload;
 
-    // Use quick reply payload if available, otherwise use message text
-    const command = quickReplyPayload || messageText.toLowerCase();
+    // Use postback, quick reply, or message text (in that order of priority)
+    const command = postbackPayload || quickReplyPayload || messageText.toLowerCase();
 
     try {
       // Show typing indicator
@@ -33,6 +40,33 @@ class CommandHandler {
         .limit(1);
 
       const user = existingUsers[0];
+
+      // Handle webview completion postbacks
+      if (postbackPayload === "WEBVIEW_PIN_COMPLETE" || postbackPayload === "WEBVIEW_BANK_COMPLETE") {
+        // Refresh user data to get updated info from webview
+        const refreshedUsers = await db
+          .select()
+          .from(messengerUsers)
+          .where(eq(messengerUsers.messengerId, senderId))
+          .limit(1);
+        
+        const refreshedUser = refreshedUsers[0];
+        
+        if (postbackPayload === "WEBVIEW_PIN_COMPLETE" && refreshedUser) {
+          // Check if PIN was set and complete wallet creation
+          if (refreshedUser.transactionPin && refreshedUser.securityQuestion) {
+            await this.completeWalletCreation(senderId, refreshedUser);
+            return;
+          }
+        } else if (postbackPayload === "WEBVIEW_BANK_COMPLETE" && refreshedUser) {
+          // Check for pending bank details and continue sell flow
+          const pendingDetails = await storage.getPendingBankDetails(senderId);
+          if (pendingDetails && refreshedUser.sellConversationData) {
+            await this.checkPendingBankDetails(senderId, refreshedUser, refreshedUser.sellConversationData);
+            return;
+          }
+        }
+      }
 
       // New user onboarding
       if (!user || !user.hasCompletedOnboarding) {
@@ -79,9 +113,19 @@ class CommandHandler {
 
       await new Promise(resolve => setTimeout(resolve, 1500));
 
-      await messengerService.sendTextMessage(
+      // Send webview button for secure PIN entry instead of asking via text
+      await messengerService.sendButtonTemplate(
         senderId,
-        `🔐 To keep your funds secure, let's set up a 4-digit transaction PIN.\n\nYou'll need this PIN every time you sell crypto or send money to your bank.\n\nPlease enter a 4-digit PIN (e.g., 1234):`
+        `🔐 To keep your funds secure, let's set up a 4-digit transaction PIN.\n\nYou'll need this PIN every time you sell crypto or send money to your bank.\n\nClick the button below to set your PIN securely:`,
+        [
+          {
+            type: "web_url",
+            title: "Set My PIN 🔐",
+            url: `${WEBVIEW_BASE_URL}/webview/pin-entry`,
+            webview_height_ratio: "tall",
+            messenger_extensions: true,
+          } as any
+        ]
       );
 
       return;
@@ -92,7 +136,27 @@ class CommandHandler {
 
     switch (currentStep) {
       case "ASK_PIN":
-        await this.handlePINSetup(senderId, user, message);
+        // Check if user has already set PIN via webview
+        if (user.transactionPin && user.securityQuestion && user.securityAnswer) {
+          // PIN already set via webview - complete wallet creation
+          await this.completeWalletCreation(senderId, user);
+        } else {
+          // User sent a message - they might be using the old text-based flow
+          // For security, redirect them to webview
+          await messengerService.sendButtonTemplate(
+            senderId,
+            `🔐 For your security, please set your PIN using the secure form.\n\nClick the button below:`,
+            [
+              {
+                type: "web_url",
+                title: "Set My PIN 🔐",
+                url: `${WEBVIEW_BASE_URL}/webview/pin-entry`,
+                webview_height_ratio: "tall",
+                messenger_extensions: true,
+              } as any
+            ]
+          );
+        }
         break;
 
       case "CONFIRM_PIN":
@@ -200,6 +264,51 @@ class CommandHandler {
       senderId,
       `✅ Security question saved!\n\n🔐 Now, please provide the answer to your security question:\n\n"${question}"\n\nYour answer:`
     );
+  }
+
+  // Complete wallet creation after PIN is set via webview
+  private async completeWalletCreation(senderId: string, user: any): Promise<void> {
+    try {
+      await messengerService.sendTextMessage(
+        senderId,
+        `⏳ Setting up your secure wallet...`
+      );
+
+      const { encryptedMnemonic, wallets } = walletService.createNewWallet();
+      
+      const walletAddresses = {
+        ethereum: wallets.ethereum.address,
+        bsc: wallets.bsc.address,
+        polygon: wallets.polygon.address,
+        arbitrum: wallets.arbitrum.address,
+        base: wallets.base.address,
+      };
+
+      await db
+        .update(messengerUsers)
+        .set({
+          walletAddresses,
+          encryptedKeys: encryptedMnemonic,
+          hasCompletedOnboarding: true,
+          onboardingStep: null,
+        })
+        .where(eq(messengerUsers.id, user.id));
+
+      await blockchainMonitor.startMonitoring(user.id);
+
+      await new Promise(resolve => setTimeout(resolve, 1500));
+
+      await messengerService.sendTextMessage(
+        senderId,
+        `✅ All set! Your wallet is ready!\n\n📱 Available Commands:\n\n/deposit - Get wallet address to receive crypto\n/sell - Convert crypto to Naira\n/balance - Check your crypto balance\n/help - Show this help message\n\nType /deposit to see your wallet address and start receiving crypto!`
+      );
+    } catch (error) {
+      console.error("[CommandHandler] Error completing wallet creation:", error);
+      await messengerService.sendTextMessage(
+        senderId,
+        "❌ Sorry, there was an error setting up your wallet. Please try again later."
+      );
+    }
   }
 
   // Handle security answer setup and complete onboarding
@@ -497,6 +606,11 @@ class CommandHandler {
         await this.handleSellAmount(senderId, user, message, data);
         break;
 
+      case "AWAIT_BANK_DETAILS":
+        // Check if bank details were saved via webview
+        await this.checkPendingBankDetails(senderId, user, data);
+        break;
+
       case "ASK_BANK_NAME":
         await this.handleSellBankName(senderId, user, message, data);
         break;
@@ -534,6 +648,62 @@ class CommandHandler {
     );
   }
 
+  // Check for pending bank details from webview
+  private async checkPendingBankDetails(senderId: string, user: any, data: any): Promise<void> {
+    try {
+      // Get pending bank details saved by webview
+      const pendingDetails = await storage.getPendingBankDetails(senderId);
+
+      if (!pendingDetails) {
+        // No bank details yet - remind user to complete webview
+        await messengerService.sendButtonTemplate(
+          senderId,
+          `🏦 Please click the button below to enter your bank details:`,
+          [
+            {
+              type: "web_url",
+              title: "Enter Bank Details 🏦",
+              url: `${WEBVIEW_BASE_URL}/webview/bank-details?amount=${data.netAmount}`,
+              webview_height_ratio: "tall",
+              messenger_extensions: true,
+            } as any
+          ]
+        );
+        return;
+      }
+
+      // Bank details received! Add to conversation data
+      data.bankName = pendingDetails.bankName;
+      data.accountNumber = pendingDetails.accountNumber;
+      data.accountName = pendingDetails.accountName;
+
+      // Clear pending details
+      await storage.clearPendingBankDetails(senderId);
+
+      // Move to PIN confirmation
+      await db
+        .update(messengerUsers)
+        .set({
+          sellConversationState: "ASK_PIN",
+          sellConversationData: data,
+        })
+        .where(eq(messengerUsers.id, user.id));
+
+      const chainName = SUPPORTED_CHAINS[data.blockchain as ChainKey];
+
+      await messengerService.sendTextMessage(
+        senderId,
+        `📋 Transaction Summary:\n\nSelling: ${data.amount} ${data.token} (${chainName})\nRate: ₦${data.rate}/${data.token}\nTotal: ₦${data.totalNaira}\nPlatform Fee (0.1%): ₦${parseFloat(data.platformFee).toFixed(2)}\n\n💰 You receive: ₦${parseFloat(data.netAmount).toFixed(2)}\n\n🏦 Bank Details:\n${data.bankName}\n${data.accountNumber}\n${data.accountName}\n\n🔐 Enter your 4-digit PIN to confirm:`
+      );
+    } catch (error) {
+      console.error("[CommandHandler] Error checking pending bank details:", error);
+      await messengerService.sendTextMessage(
+        senderId,
+        "Sorry, something went wrong. Please try again or type 'cancel' to stop."
+      );
+    }
+  }
+
   // Handle amount input
   private async handleSellAmount(senderId: string, user: any, amountStr: string, data: any): Promise<void> {
     const amount = parseFloat(amountStr);
@@ -555,19 +725,46 @@ class CommandHandler {
       return;
     }
 
+    // Calculate estimated Naira amount for display
+    const rate = 1430; // TODO: Get real-time rate from API
+    const totalNaira = amount * rate;
+    const platformFee = totalNaira * 0.001;
+    const netAmount = totalNaira - platformFee;
+
     data.amount = amount.toString();
+    data.rate = rate.toString();
+    data.totalNaira = totalNaira.toString();
+    data.platformFee = platformFee.toString();
+    data.netAmount = netAmount.toString();
 
     await db
       .update(messengerUsers)
       .set({
-        sellConversationState: "ASK_BANK_NAME",
+        sellConversationState: "AWAIT_BANK_DETAILS",
         sellConversationData: data,
       })
       .where(eq(messengerUsers.id, user.id));
 
+    // Send webview button for secure bank details entry
     await messengerService.sendTextMessage(
       senderId,
-      `✅ Amount: ${amount} ${data.token}\n\n🏦 What is your Nigerian bank name?\n\nExamples:\n- Access Bank\n- GTBank\n- First Bank\n- UBA\n\nEnter your bank name:`
+      `✅ Amount: ${amount} ${data.token}\n\n💰 Estimated Payout:\nRate: ₦${rate}/${data.token}\nYou'll receive: ₦${netAmount.toFixed(2)}\n\n🏦 Next, I need your Nigerian bank details.`
+    );
+
+    await new Promise(resolve => setTimeout(resolve, 1000));
+
+    await messengerService.sendButtonTemplate(
+      senderId,
+      `Click the button below to securely enter your bank account details:`,
+      [
+        {
+          type: "web_url",
+          title: "Enter Bank Details 🏦",
+          url: `${WEBVIEW_BASE_URL}/webview/bank-details?amount=${netAmount.toFixed(2)}`,
+          webview_height_ratio: "tall",
+          messenger_extensions: true,
+        } as any
+      ]
     );
   }
 
@@ -887,6 +1084,76 @@ class CommandHandler {
       senderId,
       "❌ PIN reset cancelled.\n\nType /reset-pin when you're ready to try again!"
     );
+  }
+
+  // PUBLIC: Called by webview API after PIN is successfully saved
+  async handlePINWebviewCompletion(psid: string): Promise<void> {
+    try {
+      // Reload user data to get the PIN that was just saved
+      const users = await db
+        .select()
+        .from(messengerUsers)
+        .where(eq(messengerUsers.messengerId, psid))
+        .limit(1);
+      
+      const user = users[0];
+      
+      if (!user) {
+        console.error("[CommandHandler] User not found for PIN webview completion:", psid);
+        return;
+      }
+      
+      // Check if PIN and security info were saved
+      if (user.transactionPin && user.securityQuestion && user.securityAnswer) {
+        // Complete wallet creation
+        await this.completeWalletCreation(psid, user);
+      } else {
+        console.error("[CommandHandler] PIN data incomplete after webview:", psid);
+        await messengerService.sendTextMessage(
+          psid,
+          "❌ Sorry, there was an issue saving your PIN. Please try again."
+        );
+      }
+    } catch (error) {
+      console.error("[CommandHandler] Error in PIN webview completion:", error);
+      await messengerService.sendTextMessage(
+        psid,
+        "❌ Sorry, there was an error. Please try again later."
+      );
+    }
+  }
+
+  // PUBLIC: Called by webview API after bank details are successfully saved
+  async handleBankDetailsWebviewCompletion(psid: string): Promise<void> {
+    try {
+      // Reload user data
+      const users = await db
+        .select()
+        .from(messengerUsers)
+        .where(eq(messengerUsers.messengerId, psid))
+        .limit(1);
+      
+      const user = users[0];
+      
+      if (!user) {
+        console.error("[CommandHandler] User not found for bank details webview completion:", psid);
+        return;
+      }
+      
+      // Check if user is in sell flow
+      if (user.sellConversationState === "AWAIT_BANK_DETAILS" && user.sellConversationData) {
+        // Check for pending bank details and continue sell flow
+        await this.checkPendingBankDetails(psid, user, user.sellConversationData);
+      } else {
+        console.error("[CommandHandler] User not in expected sell state:", psid, user.sellConversationState);
+      }
+    } catch (error) {
+      console.error("[CommandHandler] Error in bank details webview completion:", error);
+      await messengerService.sendTextMessage(
+        psid,
+        "❌ Sorry, there was an error. Please try again later."
+      );
+    }
   }
 }
 

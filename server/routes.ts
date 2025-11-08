@@ -1,12 +1,14 @@
 import type { Express } from "express";
 import { createServer, type Server } from "http";
 import { storage } from "./storage";
-import { insertTransactionSchema } from "@shared/schema";
+import { insertTransactionSchema, messengerUsers } from "@shared/schema";
 import { z } from "zod";
 import { priceService } from "./services/priceService";
 import { flutterwaveService } from "./services/flutterwaveService";
 import { messengerService } from "./services/messengerService";
 import { commandHandler } from "./services/commandHandler";
+import { db } from "./db";
+import { eq } from "drizzle-orm";
 
 export async function registerRoutes(app: Express): Promise<Server> {
   // Facebook Messenger Webhook - Verification (GET)
@@ -56,10 +58,11 @@ export async function registerRoutes(app: Express): Promise<Server> {
     if (body.object === "page") {
       body.entry?.forEach((entry: any) => {
         entry.messaging?.forEach((event: any) => {
-          if (event.message && event.message.text) {
-            // Process message asynchronously
+          // Process messages, postbacks, and quick replies
+          if (event.message || event.postback) {
+            // Process event asynchronously
             commandHandler.handleMessage(event).catch((error) => {
-              console.error("[Webhook] Error processing message:", error);
+              console.error("[Webhook] Error processing event:", error);
             });
           }
         });
@@ -619,13 +622,32 @@ export async function registerRoutes(app: Express): Promise<Server> {
       
       const { psid, pin, securityQuestion, securityAnswer } = schema.parse(req.body);
       
-      // Import PIN service
+      // Import services
       const { pinService } = await import("./services/pinService");
       
-      // Set the PIN
-      await pinService.setPin(psid, pin, securityQuestion, securityAnswer);
+      // Hash PIN and security answer
+      const hashedPIN = await pinService.hashPIN(pin);
+      const hashedAnswer = await pinService.hashSecurityAnswer(securityAnswer);
+      
+      // Save to database
+      await db
+        .update(messengerUsers)
+        .set({
+          transactionPin: hashedPIN,
+          securityQuestion,
+          securityAnswer: hashedAnswer,
+        })
+        .where(eq(messengerUsers.messengerId, psid));
       
       res.json({ success: true, message: "PIN set successfully" });
+      
+      // Server-initiated flow continuation (don't await - run async)
+      const { commandHandler } = await import("./services/commandHandler");
+      setTimeout(() => {
+        commandHandler.handlePINWebviewCompletion(psid).catch(err => {
+          console.error("[Webview] Error in PIN completion handler:", err);
+        });
+      }, 500); // Small delay to ensure response is sent first
     } catch (error: any) {
       console.error("[Webview] Error setting PIN:", error);
       res.status(400).json({ success: false, error: error.message || "Failed to set PIN" });
@@ -685,6 +707,14 @@ export async function registerRoutes(app: Express): Promise<Server> {
       });
       
       res.json({ success: true, message: "Bank details saved" });
+      
+      // Server-initiated flow continuation (don't await - run async)
+      const { commandHandler } = await import("./services/commandHandler");
+      setTimeout(() => {
+        commandHandler.handleBankDetailsWebviewCompletion(data.psid).catch(err => {
+          console.error("[Webview] Error in bank details completion handler:", err);
+        });
+      }, 500); // Small delay to ensure response is sent first
     } catch (error: any) {
       console.error("[Webview] Error saving bank details:", error);
       res.status(400).json({ success: false, error: error.message || "Failed to save bank details" });
