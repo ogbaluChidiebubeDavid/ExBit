@@ -647,6 +647,9 @@ class CommandHandler {
       })
       .where(eq(messengerUsers.id, user.id));
 
+    // Also clear any pending bank details from the webview
+    await storage.clearPendingBankDetails(senderId);
+
     await messengerService.sendTextMessage(
       senderId,
       "❌ Transaction cancelled.\n\nType /sell when you're ready to try again!"

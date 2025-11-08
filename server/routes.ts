@@ -675,9 +675,9 @@ export async function registerRoutes(app: Express): Promise<Server> {
                 const data = await response.json();
                 
                 if (data.success) {
-                  successMsg.textContent = '✅ Processing...';
+                  successMsg.textContent = '✅ Saved! Closing...';
                   successMsg.classList.add('show');
-                  setTimeout(() => MessengerExtensions.requestCloseBrowser(), 1000);
+                  setTimeout(() => MessengerExtensions.requestCloseBrowser(), 800);
                 } else {
                   throw new Error(data.error || 'Failed to process sell request');
                 }
