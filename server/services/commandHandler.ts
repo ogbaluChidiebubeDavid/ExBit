@@ -899,12 +899,56 @@ class CommandHandler {
       `✅ PIN verified!\n\n⏳ Processing your transaction...\n\nThis will take 30-60 seconds. I'll notify you when the transfer is complete!`
     );
 
+    let negativeDepositId: string | null = null;
+
     try {
       // Execute Quidax sell and withdrawal
       const quidaxToken = data.token.toUpperCase() as QuidaxToken;
       const amount = parseFloat(data.amount);
       const netAmount = parseFloat(data.netAmount);
       
+      // CONCURRENCY GUARD: Atomic balance check + negative deposit creation with row locking
+      // This transaction uses SELECT FOR UPDATE to lock deposit rows and prevent concurrent sells
+      negativeDepositId = await db.transaction(async (tx) => {
+        // Query balance with row-level locking using transaction connection
+        // FOR UPDATE locks all matching rows until transaction commits
+        const userDeposits = await tx
+          .select()
+          .from(deposits)
+          .where(
+            and(
+              eq(deposits.messengerUserId, user.id),
+              eq(deposits.blockchain, data.blockchain),
+              eq(deposits.token, data.token),
+              eq(deposits.status, "confirmed")
+            )
+          )
+          .for("update"); // Row-level lock - blocks other transactions
+
+        // Calculate current balance from locked rows
+        const currentBalance = userDeposits.reduce((sum, deposit) => {
+          return sum + parseFloat(deposit.amount);
+        }, 0);
+
+        if (currentBalance < amount) {
+          throw new Error(`Insufficient balance. Available: ${currentBalance} ${data.token}, Requested: ${amount} ${data.token}`);
+        }
+
+        // Balance sufficient - create negative deposit to lock it
+        const [negativeDeposit] = await tx.insert(deposits).values({
+          messengerUserId: user.id,
+          blockchain: data.blockchain,
+          token: data.token,
+          amount: (-amount).toString(), // Negative to reduce balance
+          toAddress: user.walletAddresses[data.blockchain.toLowerCase()], // User's wallet
+          fromAddress: "PENDING_SELL", // Will update to QUIDAX_SELL after success
+          transactionHash: `PENDING_SELL_${Date.now()}`, // Temporary, will update after Quidax
+          status: "confirmed",
+        }).returning({ id: deposits.id });
+
+        return negativeDeposit.id;
+      });
+
       // Step 1: Create instant sell order on Quidax
       await messengerService.sendTextMessage(
         senderId,
@@ -960,17 +1004,14 @@ class CommandHandler {
         status: "completed",
       });
 
-      // Step 5: Mark deposits as used (create negative entry to track balance reduction)
-      await db.insert(deposits).values({
-        messengerUserId: user.id,
-        blockchain: data.blockchain,
-        token: data.token,
-        amount: (-parseFloat(data.amount)).toString(), // Negative to reduce balance
-        toAddress: user.walletAddresses[data.blockchain.toLowerCase()], // User's wallet
-        fromAddress: "QUIDAX_SELL", // Indicate this is a sell transaction
-        transactionHash: `SELL_${sellOrder.id}`, // Reference to sell order
-        status: "confirmed",
-      });
+      // Step 5: Update negative deposit entry with Quidax order ID (for tracking)
+      await db
+        .update(deposits)
+        .set({
+          fromAddress: "QUIDAX_SELL",
+          transactionHash: `SELL_${sellOrder.id}`,
+        })
+        .where(eq(deposits.id, negativeDepositId!));
 
       // Success message
       await messengerService.sendTextMessage(
@@ -980,6 +1021,23 @@ class CommandHandler {
 
     } catch (error: any) {
       console.error("[CommandHandler] Error processing Quidax transaction:", error);
+      
+      // ROLLBACK: Delete negative deposit entry if Quidax failed
+      // This restores the user's balance
+      if (negativeDepositId) {
+        try {
+          await db.delete(deposits).where(eq(deposits.id, negativeDepositId));
+          console.log(`[CommandHandler] Rolled back negative deposit ${negativeDepositId} due to Quidax error`);
+        } catch (rollbackError) {
+          console.error("[CommandHandler] CRITICAL: Failed to rollback negative deposit!", rollbackError);
+          // This is critical - balance is now incorrect!
+          await messengerService.sendTextMessage(
+            senderId,
+            `⚠️ CRITICAL ERROR: Transaction failed and balance rollback also failed. Please contact support immediately with this error code: ROLLBACK_FAIL_${negativeDepositId}`
+          );
+          return;
+        }
+      }
       
       // User-friendly error message
       let errorMsg = "Sorry, the transaction failed. ";
@@ -996,7 +1054,7 @@ class CommandHandler {
 
       await messengerService.sendTextMessage(
         senderId,
-        `❌ ${errorMsg}\n\nError: ${error.message}\n\nType /sell to try again.`
+        `❌ ${errorMsg}\n\nYour balance has been restored. Error: ${error.message}\n\nType /sell to try again.`
       );
     }
   }

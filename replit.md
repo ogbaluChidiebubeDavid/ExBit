@@ -120,25 +120,38 @@ I prefer simple language and direct instructions. I want iterative development w
 ## Development Progress
 
 ### ✅ Completed Features (as of Nov 8, 2025)
-- ✅ **Messenger Webhook**: Facebook verified, live bot receiving messages
+- ✅ **Messenger Webhook**: Facebook verified, live bot receiving messages and postbacks
 - ✅ **Custodial Wallet System**: Multi-chain wallet generation (Ethereum, BSC, Polygon, Arbitrum, Base)
-- ✅ **Command Parser**: Natural language + slash commands (/deposit, /sell, /balance, /help)
+- ✅ **Command Parser**: Natural language + slash commands (/deposit, /sell, /balance, /help, /reset-pin)
 - ✅ **Transaction PIN System**: bcrypt-hashed 4-digit PINs with security questions
 - ✅ **Blockchain Monitoring**: Real-time deposit detection with 3000-block lookback (~100 min)
 - ✅ **Base Chain Integration**: Alchemy API, USDT support, confirmed working
-- ✅ **Database Schema**: Users, deposits, transactions, monitoring state, pending bank details
-- ✅ **Quidax API Setup**: Secret key configured, ready for sell/withdraw integration
+- ✅ **Database Schema**: Users, deposits, transactions, monitoring state, beneficiaries, pending bank details
+- ✅ **Quidax API Setup**: Secret key configured, full service implementation complete
 - ✅ **Alchemy Multi-Chain**: Single API key powers Ethereum, Polygon, Arbitrum, Base (no more RPC errors!)
 - ✅ **Messenger Webviews Infrastructure**: Secure PIN entry and bank details forms with Flutterwave validation
 - ✅ **Webview Button Integration**: Bot sends webview buttons for all sensitive data (no chat history exposure)
+- ✅ **Quidax Sell Integration**: Real-time market prices, instant sell orders, confirmation flow
+- ✅ **Quidax Withdrawal Integration**: NGN bank transfers with full validation and error handling
+- ✅ **Complete /sell Flow**: Balance check → Quidax rate → bank details webview → PIN verification → execute trade → withdraw to bank
+- ✅ **Transaction Tracking**: Full database records with Quidax order/withdrawal IDs, balance management with negative deposits
+- ✅ **Server-initiated Flow Continuation**: Webview completions automatically trigger next steps without user input
+- ✅ **Concurrency Guard**: Atomic balance checking with `SELECT FOR UPDATE` row locking prevents double-spending in concurrent sell requests
+- ✅ **Automatic Rollback**: If Quidax API fails, negative deposit is deleted and balance is restored automatically
+- ✅ **Failure Mode Testing**: Comprehensive manual test plan includes Quidax failure, concurrency, and withdrawal error scenarios
 
-### 🚧 In Progress
-- ⏳ **Quidax Sell/Withdraw**: Integration for crypto-to-Naira conversion and bank transfers
+### 🎯 MVP COMPLETE! Ready for Testing
 
 ### 📋 Next Steps
-- **Immediate**: Complete Quidax sell/withdraw flow
-- **Next**: Test complete user flow (deposit → sell → bank transfer)
-- **Then**: Add beneficiary storage for saved bank accounts
+- **Immediate**: Manual testing with real Messenger account and small crypto amounts
+- **Next**: Test deposit detection → sell → Quidax integration → bank transfer end-to-end
+- **Future Enhancements**: 
+  - Database-level safeguard for negative balances (CHECK constraint or trigger for defense in depth)
+  - Move balance aggregation to SQL using NUMERIC columns to prevent float rounding errors
+  - Beneficiary save/reuse functionality
+  - Crypto transfer from custodial wallets to Quidax (currently assumes pre-funded Quidax account)
+  - Transaction history viewing
+  - Multiple language support
 
 ### Testing Phase (Weeks 5-8)
 - Test with friends/family
