@@ -860,19 +860,24 @@ export async function registerRoutes(app: Express): Promise<Server> {
                 <select id="bankName" name="bankName" required>
                   <option value="">Select your bank...</option>
                   <option value="Access Bank">Access Bank</option>
+                  <option value="Guaranty Trust Bank">GTBank</option>
+                  <option value="United Bank for Africa">UBA</option>
                   <option value="Zenith Bank">Zenith Bank</option>
-                  <option value="GTBank">GTBank</option>
-                  <option value="First Bank">First Bank</option>
-                  <option value="UBA">UBA</option>
+                  <option value="First Bank of Nigeria">First Bank</option>
                   <option value="Fidelity Bank">Fidelity Bank</option>
                   <option value="Union Bank">Union Bank</option>
-                  <option value="Stanbic IBTC">Stanbic IBTC</option>
+                  <option value="Stanbic IBTC Bank">Stanbic IBTC</option>
                   <option value="Sterling Bank">Sterling Bank</option>
                   <option value="Wema Bank">Wema Bank</option>
+                  <option value="Polaris Bank">Polaris Bank</option>
                   <option value="Ecobank">Ecobank</option>
+                  <option value="Keystone Bank">Keystone Bank</option>
                   <option value="FCMB">FCMB</option>
+                  <option value="Heritage Bank">Heritage Bank</option>
+                  <option value="Jaiz Bank">Jaiz Bank</option>
+                  <option value="Providus Bank">Providus Bank</option>
                   <option value="Kuda Bank">Kuda Bank</option>
-                  <option value="OPay">OPay</option>
+                  <option value="Opay">OPay</option>
                   <option value="PalmPay">PalmPay</option>
                 </select>
               </div>
