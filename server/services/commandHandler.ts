@@ -536,20 +536,19 @@ class CommandHandler {
         return;
       }
 
-      const quickReplies: Array<{ title: string; payload: string }> = [];
-      for (const [key, amount] of Object.entries(balances)) {
-        const [blockchain, token] = key.split("-");
-        const chainName = SUPPORTED_CHAINS[blockchain as ChainKey] || blockchain;
-        quickReplies.push({
-          title: `${amount} ${token} (${chainName})`,
-          payload: `SELL_${blockchain}_${token}_${amount}`,
-        });
-      }
-
-      await messengerService.sendQuickReply(
+      // Send webview button to open sell amount form
+      await messengerService.sendButtonTemplate(
         senderId,
-        "💱 Which crypto would you like to sell?\n\n💡 Tip: Type 'cancel' anytime to stop.",
-        quickReplies
+        "💱 Ready to sell your crypto!\n\nClick the button below to select which token and how much you want to sell:",
+        [
+          {
+            type: "web_url",
+            title: "Sell Crypto 💱",
+            url: `${WEBVIEW_BASE_URL}/webview/sell-amount`,
+            webview_height_ratio: "tall",
+            messenger_extensions: true,
+          } as any
+        ]
       );
     } catch (error) {
       console.error("[CommandHandler] Error in sell command:", error);
@@ -1287,6 +1286,64 @@ class CommandHandler {
   }
 
   // PUBLIC: Called by webview API after bank details are successfully saved
+  async handleSellAmountWebviewCompletion(psid: string): Promise<void> {
+    try {
+      // Reload user data to get the updated sellConversationData
+      const users = await db
+        .select()
+        .from(messengerUsers)
+        .where(eq(messengerUsers.messengerId, psid))
+        .limit(1);
+      
+      const user = users[0];
+      
+      if (!user) {
+        console.error("[CommandHandler] User not found for sell amount webview completion:", psid);
+        return;
+      }
+      
+      // Check if sell data was saved
+      if (user.sellConversationState === "AWAIT_BANK_DETAILS" && user.sellConversationData) {
+        const data = user.sellConversationData;
+        
+        // Show confirmation message with exchange rate
+        await messengerService.sendTextMessage(
+          psid,
+          `💱 Selling ${data.amount} ${data.token}\n\n📊 Exchange Rate: ₦${parseFloat(data.quidaxRate).toLocaleString()} per ${data.token}\n💰 You'll receive: ₦${parseFloat(data.netAmount).toLocaleString()}\n💵 Platform fee (0.1%): ₦${parseFloat(data.platformFee).toLocaleString()}\n\nNext, I need your bank details to complete the transfer.`
+        );
+        
+        await new Promise(resolve => setTimeout(resolve, 1500));
+        
+        // Open bank details webview
+        await messengerService.sendButtonTemplate(
+          psid,
+          "🏦 Click the button below to enter your Nigerian bank account details:",
+          [
+            {
+              type: "web_url",
+              title: "Enter Bank Details 🏦",
+              url: `${WEBVIEW_BASE_URL}/webview/bank-details?amount=${data.netAmount}&token=${data.token}`,
+              webview_height_ratio: "tall",
+              messenger_extensions: true,
+            } as any
+          ]
+        );
+      } else {
+        console.error("[CommandHandler] Sell data incomplete after webview:", psid, user.sellConversationState);
+        await messengerService.sendTextMessage(
+          psid,
+          "❌ Sorry, there was an issue processing your request. Please try /sell again."
+        );
+      }
+    } catch (error) {
+      console.error("[CommandHandler] Error in sell amount webview completion:", error);
+      await messengerService.sendTextMessage(
+        psid,
+        "❌ Sorry, there was an error. Please try again later."
+      );
+    }
+  }
+
   async handleBankDetailsWebviewCompletion(psid: string): Promise<void> {
     try {
       // Reload user data
