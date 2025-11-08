@@ -1056,6 +1056,328 @@ export async function registerRoutes(app: Express): Promise<Server> {
     res.send(html);
   });
 
+  // Messenger Webview - Confirm PIN for Transaction
+  app.get("/webview/confirm-pin", async (req, res) => {
+    const psidParam = req.query.psid || "";
+    
+    const html = `
+      <!DOCTYPE html>
+      <html>
+        <head>
+          <meta charset="UTF-8">
+          <meta name="viewport" content="width=device-width, initial-scale=1.0">
+          <title>Confirm Transaction</title>
+          <style>
+            * { box-sizing: border-box; margin: 0; padding: 0; }
+            body {
+              font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, sans-serif;
+              background: linear-gradient(135deg, #667eea 0%, #764ba2 100%);
+              min-height: 100vh;
+              display: flex;
+              align-items: center;
+              justify-content: center;
+              padding: 20px;
+            }
+            .container {
+              background: white;
+              border-radius: 16px;
+              padding: 32px 24px;
+              max-width: 400px;
+              width: 100%;
+              box-shadow: 0 20px 60px rgba(0,0,0,0.2);
+            }
+            h1 {
+              font-size: 24px;
+              color: #1a1a1a;
+              margin-bottom: 8px;
+              text-align: center;
+            }
+            .subtitle {
+              font-size: 14px;
+              color: #666;
+              text-align: center;
+              margin-bottom: 24px;
+            }
+            .summary-box {
+              background: #f7fafc;
+              border-radius: 12px;
+              padding: 16px;
+              margin-bottom: 24px;
+            }
+            .summary-row {
+              display: flex;
+              justify-content: space-between;
+              padding: 8px 0;
+              border-bottom: 1px solid #e2e8f0;
+            }
+            .summary-row:last-child {
+              border-bottom: none;
+              font-weight: 600;
+              font-size: 18px;
+              color: #2d3748;
+              padding-top: 12px;
+              margin-top: 8px;
+              border-top: 2px solid #cbd5e0;
+            }
+            .summary-label {
+              color: #718096;
+              font-size: 14px;
+            }
+            .summary-value {
+              color: #2d3748;
+              font-weight: 500;
+              font-size: 14px;
+            }
+            .form-group {
+              margin-bottom: 24px;
+            }
+            label {
+              display: block;
+              font-size: 14px;
+              font-weight: 600;
+              color: #333;
+              margin-bottom: 8px;
+            }
+            input {
+              width: 100%;
+              padding: 12px 16px;
+              border: 2px solid #e0e0e0;
+              border-radius: 8px;
+              font-size: 16px;
+              transition: border-color 0.3s;
+            }
+            input:focus {
+              outline: none;
+              border-color: #667eea;
+            }
+            input[type="password"] {
+              letter-spacing: 8px;
+              font-size: 24px;
+              text-align: center;
+            }
+            .btn {
+              width: 100%;
+              padding: 14px;
+              background: linear-gradient(135deg, #667eea 0%, #764ba2 100%);
+              color: white;
+              border: none;
+              border-radius: 8px;
+              font-size: 16px;
+              font-weight: 600;
+              cursor: pointer;
+              transition: transform 0.2s;
+            }
+            .btn:hover { transform: translateY(-2px); }
+            .btn:disabled {
+              background: #ccc;
+              cursor: not-allowed;
+              transform: none;
+            }
+            .error {
+              color: #e53e3e;
+              font-size: 14px;
+              margin-top: 8px;
+              text-align: center;
+              display: none;
+            }
+            .success {
+              color: #38a169;
+              font-size: 14px;
+              margin-top: 8px;
+              text-align: center;
+              display: none;
+            }
+            .security-note {
+              background: #fff5f5;
+              border-left: 4px solid #f56565;
+              padding: 12px;
+              margin-top: 16px;
+              font-size: 13px;
+              color: #c53030;
+              border-radius: 4px;
+            }
+          </style>
+        </head>
+        <body>
+          <div class="container">
+            <h1>🔐 Confirm Transaction</h1>
+            <p class="subtitle">Enter your PIN to complete the swap</p>
+            
+            <div class="summary-box" id="summaryBox">
+              <div class="summary-row">
+                <span class="summary-label">Loading transaction...</span>
+              </div>
+            </div>
+            
+            <form id="pinForm">
+              <div class="form-group">
+                <label for="pin">Enter 4-Digit PIN</label>
+                <input type="password" id="pin" name="pin" maxlength="4" pattern="[0-9]{4}" inputmode="numeric" required placeholder="••••" autocomplete="off">
+              </div>
+              
+              <button type="submit" class="btn" id="submitBtn">Confirm & Process</button>
+              
+              <div class="error" id="errorMsg"></div>
+              <div class="success" id="successMsg"></div>
+            </form>
+            
+            <div class="security-note">
+              <strong>⚠️ Important:</strong> This action cannot be undone. Verify all details before confirming.
+            </div>
+          </div>
+          
+          <script>
+            (function(d, s, id){
+              var js, fjs = d.getElementsByTagName(s)[0];
+              if (d.getElementById(id)) { return; }
+              js = d.createElement(s); js.id = id;
+              js.src = "//connect.facebook.net/en_US/messenger.Extensions.js";
+              fjs.parentNode.insertBefore(js, fjs);
+            }(document, 'script', 'Messenger'));
+            
+            let psid = null;
+            let transactionData = null;
+            
+            // URL parameter method (primary)
+            const urlParams = new URLSearchParams(window.location.search);
+            if (urlParams.has('psid')) {
+              psid = urlParams.get('psid');
+              console.log('[Webview] Got PSID from URL:', psid);
+              setupForm();
+            }
+            
+            // MessengerExtensions method (fallback)
+            window.extAsyncInit = function() {
+              if (!psid) {
+                MessengerExtensions.getUserID(function success(uids) {
+                  psid = uids.psid;
+                  console.log('[Webview] Got PSID from MessengerExtensions:', psid);
+                  setupForm();
+                }, function error(err, errorMessage) {
+                  console.error('[Webview] MessengerExtensions error:', err, errorMessage);
+                  if (!psid) {
+                    document.getElementById('errorMsg').textContent = 'Failed to load user data. Please try again.';
+                    document.getElementById('errorMsg').style.display = 'block';
+                  }
+                });
+              }
+            };
+            
+            function setupForm() {
+              // Load transaction summary
+              fetch(\`/api/webview/get-transaction-summary?psid=\${psid}\`)
+                .then(res => res.json())
+                .then(data => {
+                  if (data.success && data.summary) {
+                    transactionData = data.summary;
+                    displaySummary(data.summary);
+                  } else {
+                    throw new Error('Failed to load transaction details');
+                  }
+                })
+                .catch(err => {
+                  document.getElementById('errorMsg').textContent = err.message;
+                  document.getElementById('errorMsg').style.display = 'block';
+                });
+              
+              document.getElementById('pinForm').addEventListener('submit', handleSubmit);
+            }
+            
+            function displaySummary(summary) {
+              const summaryBox = document.getElementById('summaryBox');
+              summaryBox.innerHTML = \`
+                <div class="summary-row">
+                  <span class="summary-label">Selling</span>
+                  <span class="summary-value">\${summary.amount} \${summary.token}</span>
+                </div>
+                <div class="summary-row">
+                  <span class="summary-label">Rate</span>
+                  <span class="summary-value">₦\${summary.rate}/\${summary.token}</span>
+                </div>
+                <div class="summary-row">
+                  <span class="summary-label">Bank</span>
+                  <span class="summary-value">\${summary.bankName}</span>
+                </div>
+                <div class="summary-row">
+                  <span class="summary-label">Account</span>
+                  <span class="summary-value">\${summary.accountName}</span>
+                </div>
+                <div class="summary-row">
+                  <span class="summary-label">Fee (0.1%)</span>
+                  <span class="summary-value">₦\${parseFloat(summary.platformFee).toFixed(2)}</span>
+                </div>
+                <div class="summary-row">
+                  <span class="summary-label">💰 You receive</span>
+                  <span class="summary-value">₦\${parseFloat(summary.netAmount).toFixed(2)}</span>
+                </div>
+              \`;
+            }
+            
+            function handleSubmit(e) {
+              e.preventDefault();
+              const pin = document.getElementById('pin').value;
+              const errorMsg = document.getElementById('errorMsg');
+              const successMsg = document.getElementById('successMsg');
+              const submitBtn = document.getElementById('submitBtn');
+              
+              errorMsg.style.display = 'none';
+              successMsg.style.display = 'none';
+              
+              if (!/^[0-9]{4}$/.test(pin)) {
+                errorMsg.textContent = 'PIN must be exactly 4 digits';
+                errorMsg.style.display = 'block';
+                return;
+              }
+              
+              submitBtn.disabled = true;
+              submitBtn.textContent = 'Processing...';
+              
+              fetch('/api/webview/confirm-pin', {
+                method: 'POST',
+                headers: { 'Content-Type': 'application/json' },
+                body: JSON.stringify({ psid, pin })
+              })
+              .then(res => res.json())
+              .then(data => {
+                if (data.success) {
+                  successMsg.textContent = '✅ Transaction processing!';
+                  successMsg.style.display = 'block';
+                  
+                  // Try to close webview
+                  setTimeout(() => {
+                    if (typeof MessengerExtensions !== 'undefined') {
+                      MessengerExtensions.requestCloseBrowser(
+                        function success() {
+                          console.log('[Webview] Closed via MessengerExtensions');
+                        },
+                        function error(err) {
+                          console.error('[Webview] MessengerExtensions failed, using window.close()');
+                          window.close();
+                        }
+                      );
+                    } else {
+                      console.log('[Webview] Using window.close()');
+                      window.close();
+                    }
+                  }, 1500);
+                } else {
+                  throw new Error(data.error || 'Invalid PIN');
+                }
+              })
+              .catch(err => {
+                errorMsg.textContent = err.message;
+                errorMsg.style.display = 'block';
+                submitBtn.disabled = false;
+                submitBtn.textContent = 'Confirm & Process';
+              });
+            }
+          </script>
+        </body>
+      </html>
+    `;
+    res.send(html);
+  });
+
   // API endpoint - Save PIN from webview
   app.post("/api/webview/set-pin", async (req, res) => {
     try {
@@ -1284,6 +1606,99 @@ export async function registerRoutes(app: Express): Promise<Server> {
     } catch (error: any) {
       console.error("[Webview] Error saving bank details:", error);
       res.status(400).json({ success: false, error: error.message || "Failed to save bank details" });
+    }
+  });
+
+  // API endpoint - Get transaction summary for PIN confirmation webview
+  app.get("/api/webview/get-transaction-summary", async (req, res) => {
+    try {
+      const psid = req.query.psid as string;
+      
+      if (!psid) {
+        return res.status(400).json({ success: false, error: "Missing PSID" });
+      }
+      
+      // Get user's sell conversation data
+      const user = await db.query.messengerUsers.findFirst({
+        where: eq(messengerUsers.messengerId, psid),
+      });
+      
+      if (!user || !user.sellConversationData) {
+        return res.status(404).json({ success: false, error: "No pending transaction found" });
+      }
+      
+      const data = user.sellConversationData as any;
+      
+      // Return summary for display
+      res.json({
+        success: true,
+        summary: {
+          amount: data.amount,
+          token: data.token,
+          blockchain: data.blockchain,
+          rate: data.rate,
+          totalNaira: data.totalNaira,
+          platformFee: data.platformFee,
+          netAmount: data.netAmount,
+          bankName: data.bankName,
+          accountNumber: data.accountNumber,
+          accountName: data.accountName,
+        }
+      });
+    } catch (error: any) {
+      console.error("[API] Error getting transaction summary:", error);
+      res.status(500).json({ success: false, error: "Failed to load transaction" });
+    }
+  });
+
+  // API endpoint - Confirm PIN and process transaction
+  app.post("/api/webview/confirm-pin", async (req, res) => {
+    try {
+      const schema = z.object({
+        psid: z.string(),
+        pin: z.string().length(4).regex(/^[0-9]{4}$/),
+      });
+      
+      const { psid, pin } = schema.parse(req.body);
+      
+      // Get user
+      const user = await db.query.messengerUsers.findFirst({
+        where: eq(messengerUsers.messengerId, psid),
+      });
+      
+      if (!user || !user.transactionPin) {
+        return res.status(401).json({ success: false, error: "PIN not set" });
+      }
+      
+      if (!user.sellConversationData) {
+        return res.status(400).json({ success: false, error: "No pending transaction" });
+      }
+      
+      // Verify PIN
+      const { pinService } = await import("./services/pinService");
+      const isValid = await pinService.verifyPIN(pin, user.transactionPin);
+      
+      if (!isValid) {
+        return res.status(401).json({ success: false, error: "Incorrect PIN" });
+      }
+      
+      res.json({ success: true, message: "PIN verified. Processing transaction..." });
+      
+      // Server-initiated transaction processing (don't await - run async)
+      const { commandHandler } = await import("./services/commandHandler");
+      setTimeout(() => {
+        commandHandler.handlePINWebviewConfirmation(psid).catch(err => {
+          console.error("[Webview] Error in PIN confirmation handler:", err);
+        });
+      }, 500);
+    } catch (error: any) {
+      console.error("[API] Error confirming PIN:", error);
+      
+      if (error instanceof z.ZodError) {
+        return res.status(400).json({ success: false, error: "Invalid PIN format" });
+      }
+      
+      res.status(500).json({ success: false, error: error.message || "Failed to verify PIN" });
     }
   });
 

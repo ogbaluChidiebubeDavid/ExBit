@@ -635,7 +635,20 @@ class CommandHandler {
         break;
 
       case "ASK_PIN":
-        await this.handleSellPIN(senderId, user, message, data);
+        // Remind user to use webview for PIN entry (not chat)
+        await messengerService.sendButtonTemplate(
+          senderId,
+          `🔐 Please click the button below to enter your PIN securely:`,
+          [
+            {
+              type: "web_url",
+              title: "Enter PIN 🔐",
+              url: `${WEBVIEW_BASE_URL}/webview/confirm-pin?psid=${senderId}`,
+              webview_height_ratio: "tall",
+              messenger_extensions: true,
+            } as any
+          ]
+        );
         break;
 
       default:
@@ -703,11 +716,19 @@ class CommandHandler {
         })
         .where(eq(messengerUsers.id, user.id));
 
-      const chainName = SUPPORTED_CHAINS[data.blockchain as ChainKey];
-
-      await messengerService.sendTextMessage(
+      // Send webview button for PIN entry (keeps PIN private - not in chat history)
+      await messengerService.sendButtonTemplate(
         senderId,
-        `📋 Transaction Summary:\n\nSelling: ${data.amount} ${data.token} (${chainName})\nRate: ₦${data.rate}/${data.token}\nTotal: ₦${data.totalNaira}\nPlatform Fee (0.1%): ₦${parseFloat(data.platformFee).toFixed(2)}\n\n💰 You receive: ₦${parseFloat(data.netAmount).toFixed(2)}\n\n🏦 Bank Details:\n${data.bankName}\n${data.accountNumber}\n${data.accountName}\n\n🔐 Enter your 4-digit PIN to confirm:`
+        `✅ Bank details verified!\n\n🔐 Ready to complete your transaction? Click below to enter your PIN:`,
+        [
+          {
+            type: "web_url",
+            title: "Enter PIN 🔐",
+            url: `${WEBVIEW_BASE_URL}/webview/confirm-pin?psid=${senderId}`,
+            webview_height_ratio: "tall",
+            messenger_extensions: true,
+          } as any
+        ]
       );
     } catch (error) {
       console.error("[CommandHandler] Error checking pending bank details:", error);
@@ -739,49 +760,13 @@ class CommandHandler {
       return;
     }
 
-    try {
-      // Price fetching is now handled by the webview using CoinGecko
-      // This function is kept for backward compatibility but shouldn't be reached
-      // in the current webview-based flow
-      
-      data.amount = amount.toString();
-
-      await db
-        .update(messengerUsers)
-        .set({
-          sellConversationState: "AWAIT_BANK_DETAILS",
-          sellConversationData: data,
-        })
-        .where(eq(messengerUsers.id, user.id));
-
-      // Send webview button for secure bank details entry
-      await messengerService.sendTextMessage(
-        senderId,
-        `✅ Amount: ${amount} ${data.token}\n\n💰 Estimated Payout:\nRate: ₦${rate.toFixed(2)}/${data.token}\nTotal: ₦${totalNaira.toFixed(2)}\nPlatform Fee (0.1%): ₦${platformFee.toFixed(2)}\n\nYou'll receive: ₦${netAmount.toFixed(2)}\n\n🏦 Next, I need your Nigerian bank details.`
-      );
-
-      await new Promise(resolve => setTimeout(resolve, 1000));
-
-      await messengerService.sendButtonTemplate(
-        senderId,
-        `Click the button below to securely enter your bank account details:`,
-        [
-          {
-            type: "web_url",
-            title: "Enter Bank Details 🏦",
-            url: `${WEBVIEW_BASE_URL}/webview/bank-details?amount=${netAmount.toFixed(2)}`,
-            webview_height_ratio: "tall",
-            messenger_extensions: true,
-          } as any
-        ]
-      );
-    } catch (error) {
-      console.error("[CommandHandler] Error in sell amount handler:", error);
-      await messengerService.sendTextMessage(
-        senderId,
-        "Sorry, something went wrong. Please try again or type 'cancel' to stop."
-      );
-    }
+    // This code path is kept for backward compatibility but shouldn't be reached
+    // in the current webview-based flow (webview handles all amount/price calculation)
+    
+    await messengerService.sendTextMessage(
+      senderId,
+      "❌ Please use the sell amount webview button to enter your amount. Type /sell to start over."
+    );
   }
 
   // Handle bank name input
@@ -893,8 +878,13 @@ class CommandHandler {
       return;
     }
 
+    // PIN verified - clear conversation state and process transaction
     await this.cancelSellConversation(senderId, user);
+    await this.processSellTransaction(senderId, user, data);
+  }
 
+  // Process sell transaction (Web3 transfer + Flutterwave payout)
+  private async processSellTransaction(senderId: string, user: any, data: any): Promise<void> {
     await messengerService.sendTextMessage(
       senderId,
       `✅ PIN verified!\n\n⏳ Processing your transaction...\n\nThis will take 30-60 seconds. I'll notify you when the transfer is complete!`
@@ -1395,6 +1385,43 @@ class CommandHandler {
       await messengerService.sendTextMessage(
         psid,
         "❌ Sorry, there was an error. Please try again later."
+      );
+    }
+  }
+
+  async handlePINWebviewConfirmation(psid: string): Promise<void> {
+    try {
+      // Reload user data
+      const users = await db
+        .select()
+        .from(messengerUsers)
+        .where(eq(messengerUsers.messengerId, psid))
+        .limit(1);
+      
+      const user = users[0];
+      
+      if (!user) {
+        console.error("[CommandHandler] User not found for PIN confirmation:", psid);
+        return;
+      }
+      
+      // Verify user is in PIN confirmation state
+      if (user.sellConversationState !== "ASK_PIN" || !user.sellConversationData) {
+        console.error("[CommandHandler] User not in PIN confirmation state:", psid, user.sellConversationState);
+        return;
+      }
+      
+      const data = user.sellConversationData as any;
+      
+      // PIN already verified in webview - clear conversation state and process transaction
+      await this.cancelSellConversation(psid, user);
+      await this.processSellTransaction(psid, user, data);
+      
+    } catch (error) {
+      console.error("[CommandHandler] Error in PIN webview confirmation:", error);
+      await messengerService.sendTextMessage(
+        psid,
+        "❌ Sorry, there was an error processing your transaction. Please try again later."
       );
     }
   }

@@ -38,6 +38,10 @@ export class FlutterwaveService {
     };
   }
 
+  getBankCode(bankName: string): string | null {
+    return BANK_CODES[bankName] || null;
+  }
+
   async validateBankAccount(
     accountNumber: string,
     bankName: string
