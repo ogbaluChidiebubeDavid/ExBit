@@ -126,6 +126,8 @@ I prefer simple language and direct instructions. I want iterative development w
 ## Development Progress
 
 ### ✅ Completed Features (as of Nov 8, 2025)
+
+#### Messenger Bot Interface (Custodial)
 - ✅ **Messenger Webhook**: Facebook verified, live bot receiving messages and postbacks
 - ✅ **Custodial Wallet System**: Multi-chain wallet generation (Ethereum, BSC, Polygon, Arbitrum, Base)
 - ✅ **Command Parser**: Natural language + slash commands (/deposit, /sell, /balance, /help, /reset-pin)
@@ -136,9 +138,6 @@ I prefer simple language and direct instructions. I want iterative development w
 - ✅ **Alchemy Multi-Chain**: Single API key powers Ethereum, Polygon, Arbitrum, Base (no more RPC errors!)
 - ✅ **Messenger Webviews Infrastructure**: Secure PIN entry and bank details forms with Flutterwave validation
 - ✅ **Webview Button Integration**: Bot sends webview buttons for all sensitive data (no chat history exposure)
-- ✅ **CoinGecko Price Integration**: Real-time crypto-to-Naira market rates via free public API
-- ✅ **Web3 Transfer Service**: Automated crypto transfers from user custodial wallets to owner wallet
-- ✅ **Flutterwave Transfer Service**: NGN bank transfers from owner's prefunded account to user banks
 - ✅ **Complete /sell Flow (CoinGecko + Web3 + Flutterwave)**: 
   - /sell command → sell amount webview (select token + enter amount)
   - Auto-fetch CoinGecko market price and calculate fees
@@ -150,6 +149,31 @@ I prefer simple language and direct instructions. I want iterative development w
 - ✅ **Concurrency Guard**: Atomic balance checking with `SELECT FOR UPDATE` row locking prevents double-spending
 - ✅ **Automatic Rollback**: If transaction fails, negative deposit is deleted and balance is restored
 - ✅ **Balance Management**: Negative deposits for tracking sells, float-based calculations
+
+#### Web Agent Interface (Non-Custodial) - ✅ PRODUCTION READY
+- ✅ **Modern Landing Page**: Inspired by useazza.com with smooth animations and responsive design
+- ✅ **Wallet Connection**: MetaMask integration with multi-chain support (Ethereum, BSC, Polygon, Arbitrum, Base)
+- ✅ **AI Chat Interface**: Conversational AI for swap requests (similar to Messenger bot UX)
+- ✅ **Complete Swap Flow**:
+  - User connects wallet via MetaMask
+  - Conversational swap: "Swap 0.07 USDT on BSC to Naira"
+  - Real-time CoinGecko quotes with fee breakdown
+  - Bank details form with Flutterwave account name validation
+  - Transaction signing via MetaMask (user signs their own transaction)
+  - On-chain confirmation monitoring
+  - Flutterwave Naira payout to bank account
+- ✅ **ERC20 Token Support**: Full support for all tokens (USDT, USDC, DAI, BUSD)
+- ✅ **Per-Chain Decimal Handling**: 
+  - BSC: 18 decimals for all stablecoins (USDT, USDC, BUSD)
+  - Ethereum/L2: 6 decimals for USDT/USDC, 18 for DAI
+  - Prevents amount mismatch bugs
+- ✅ **Security**: Mandatory owner wallet address validation (no defaults)
+- ✅ **Architect Approved**: Production-ready for all supported tokens and chains
+
+#### Shared Infrastructure
+- ✅ **CoinGecko Price Integration**: Real-time crypto-to-Naira market rates via free public API
+- ✅ **Web3 Transfer Service**: Automated crypto transfers to owner wallet
+- ✅ **Flutterwave Transfer Service**: NGN bank transfers from owner's prefunded account to user banks
 
 ### 🎯 Architecture Migration Complete!
 **Changed from Quidax to CoinGecko + Web3 + Flutterwave**
