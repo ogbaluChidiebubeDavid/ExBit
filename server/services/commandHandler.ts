@@ -2,9 +2,10 @@ import { messengerService } from "./messengerService";
 import { walletService, type ChainKey, SUPPORTED_CHAINS } from "./walletService";
 import { blockchainMonitor } from "./blockchainMonitor";
 import { pinService } from "./pinService";
+import { quidaxService, type QuidaxToken } from "./quidaxService";
 import { db } from "../db";
-import { messengerUsers } from "@shared/schema";
-import { eq } from "drizzle-orm";
+import { messengerUsers, transactions, deposits } from "@shared/schema";
+import { eq, and } from "drizzle-orm";
 import { storage } from "../storage";
 
 // Get webview domain from environment (use REPLIT_DEV_DOMAIN for development)
@@ -725,47 +726,57 @@ class CommandHandler {
       return;
     }
 
-    // Calculate estimated Naira amount for display
-    const rate = 1430; // TODO: Get real-time rate from API
-    const totalNaira = amount * rate;
-    const platformFee = totalNaira * 0.001;
-    const netAmount = totalNaira - platformFee;
+    try {
+      // Get real-time market price from Quidax
+      const quidaxToken = data.token.toUpperCase() as QuidaxToken;
+      const rate = await quidaxService.getMarketPrice(quidaxToken);
+      
+      const totalNaira = amount * rate;
+      const platformFee = Math.max(totalNaira * 0.001, 143); // 0.1% or ₦143 minimum
+      const netAmount = totalNaira - platformFee;
 
-    data.amount = amount.toString();
-    data.rate = rate.toString();
-    data.totalNaira = totalNaira.toString();
-    data.platformFee = platformFee.toString();
-    data.netAmount = netAmount.toString();
+      data.amount = amount.toString();
+      data.rate = rate.toString();
+      data.totalNaira = totalNaira.toString();
+      data.platformFee = platformFee.toString();
+      data.netAmount = netAmount.toString();
 
-    await db
-      .update(messengerUsers)
-      .set({
-        sellConversationState: "AWAIT_BANK_DETAILS",
-        sellConversationData: data,
-      })
-      .where(eq(messengerUsers.id, user.id));
+      await db
+        .update(messengerUsers)
+        .set({
+          sellConversationState: "AWAIT_BANK_DETAILS",
+          sellConversationData: data,
+        })
+        .where(eq(messengerUsers.id, user.id));
 
-    // Send webview button for secure bank details entry
-    await messengerService.sendTextMessage(
-      senderId,
-      `✅ Amount: ${amount} ${data.token}\n\n💰 Estimated Payout:\nRate: ₦${rate}/${data.token}\nYou'll receive: ₦${netAmount.toFixed(2)}\n\n🏦 Next, I need your Nigerian bank details.`
-    );
+      // Send webview button for secure bank details entry
+      await messengerService.sendTextMessage(
+        senderId,
+        `✅ Amount: ${amount} ${data.token}\n\n💰 Estimated Payout:\nRate: ₦${rate.toFixed(2)}/${data.token}\nTotal: ₦${totalNaira.toFixed(2)}\nPlatform Fee (0.1%): ₦${platformFee.toFixed(2)}\n\nYou'll receive: ₦${netAmount.toFixed(2)}\n\n🏦 Next, I need your Nigerian bank details.`
+      );
 
-    await new Promise(resolve => setTimeout(resolve, 1000));
+      await new Promise(resolve => setTimeout(resolve, 1000));
 
-    await messengerService.sendButtonTemplate(
-      senderId,
-      `Click the button below to securely enter your bank account details:`,
-      [
-        {
-          type: "web_url",
-          title: "Enter Bank Details 🏦",
-          url: `${WEBVIEW_BASE_URL}/webview/bank-details?amount=${netAmount.toFixed(2)}`,
-          webview_height_ratio: "tall",
-          messenger_extensions: true,
-        } as any
-      ]
-    );
+      await messengerService.sendButtonTemplate(
+        senderId,
+        `Click the button below to securely enter your bank account details:`,
+        [
+          {
+            type: "web_url",
+            title: "Enter Bank Details 🏦",
+            url: `${WEBVIEW_BASE_URL}/webview/bank-details?amount=${netAmount.toFixed(2)}`,
+            webview_height_ratio: "tall",
+            messenger_extensions: true,
+          } as any
+        ]
+      );
+    } catch (error) {
+      console.error("[CommandHandler] Error fetching Quidax price:", error);
+      await messengerService.sendTextMessage(
+        senderId,
+        "Sorry, I couldn't fetch the current market price. Please try again in a moment or type 'cancel' to stop."
+      );
+    }
   }
 
   // Handle bank name input
@@ -888,12 +899,100 @@ class CommandHandler {
       `✅ PIN verified!\n\n⏳ Processing your transaction...\n\nThis will take 30-60 seconds. I'll notify you when the transfer is complete!`
     );
 
-    await new Promise(resolve => setTimeout(resolve, 2000));
+    try {
+      // Execute Quidax sell and withdrawal
+      const quidaxToken = data.token.toUpperCase() as QuidaxToken;
+      const amount = parseFloat(data.amount);
+      const netAmount = parseFloat(data.netAmount);
+      
+      // Step 1: Create instant sell order on Quidax
+      await messengerService.sendTextMessage(
+        senderId,
+        `🔄 Step 1/3: Creating sell order on Quidax...`
+      );
 
-    await messengerService.sendTextMessage(
-      senderId,
-      `🎉 Transaction Successful!\n\n₦${data.netAmount} sent to:\n${data.bankName}\n${data.accountNumber}\n${data.accountName}\n\nFull Quidax integration coming soon! 🚧\n\nType /balance to check your remaining balance.`
-    );
+      const sellOrder = await quidaxService.createInstantSellOrder(quidaxToken, amount);
+
+      // Step 2: Confirm the sell order
+      await messengerService.sendTextMessage(
+        senderId,
+        `🔄 Step 2/3: Confirming trade...`
+      );
+
+      await quidaxService.confirmInstantOrder(sellOrder.id);
+
+      // Step 3: Withdraw NGN to bank account
+      await messengerService.sendTextMessage(
+        senderId,
+        `🔄 Step 3/3: Transferring ₦${netAmount.toFixed(2)} to your bank...`
+      );
+
+      const bankCode = quidaxService.getBankCode(data.bankName);
+      
+      if (!bankCode) {
+        throw new Error(`Bank not supported: ${data.bankName}`);
+      }
+
+      const withdrawal = await quidaxService.withdrawToBank(
+        Math.floor(netAmount), // Quidax requires integer amounts
+        bankCode,
+        data.accountNumber,
+        data.accountName
+      );
+
+      // Step 4: Create transaction record
+      await db.insert(transactions).values({
+        messengerUserId: user.id,
+        blockchain: data.blockchain,
+        token: data.token,
+        cryptoAmount: data.amount,
+        nairaAmount: data.totalNaira,
+        fee: data.platformFee,
+        bankName: data.bankName,
+        accountNumber: data.accountNumber,
+        accountName: data.accountName,
+        quidaxOrderId: sellOrder.id,
+        quidaxWithdrawalId: withdrawal.id,
+        status: "completed",
+      });
+
+      // Step 5: Mark deposits as used (create negative entry to track balance reduction)
+      await db.insert(deposits).values({
+        messengerUserId: user.id,
+        blockchain: data.blockchain,
+        token: data.token,
+        amount: (-parseFloat(data.amount)).toString(), // Negative to reduce balance
+        txHash: `SELL_${sellOrder.id}`, // Reference to sell order
+        status: "confirmed",
+      });
+
+      // Success message
+      await messengerService.sendTextMessage(
+        senderId,
+        `🎉 Transaction Successful!\n\n✅ Sold: ${data.amount} ${data.token}\n💰 Received: ₦${netAmount.toFixed(2)}\n\n🏦 Sent to:\n${data.bankName}\n${data.accountNumber}\n${data.accountName}\n\n📱 Order ID: ${sellOrder.id}\n🔗 Withdrawal ID: ${withdrawal.id}\n\nType /balance to check your remaining balance.`
+      );
+
+    } catch (error: any) {
+      console.error("[CommandHandler] Error processing Quidax transaction:", error);
+      
+      // User-friendly error message
+      let errorMsg = "Sorry, the transaction failed. ";
+      
+      if (error.message?.includes("Insufficient")) {
+        errorMsg += "There was an issue with the Quidax account balance. Please contact support.";
+      } else if (error.message?.includes("invalid account") || error.message?.includes("Bank account")) {
+        errorMsg += "Your bank account details couldn't be validated. Please try again with correct details.";
+      } else if (error.message?.includes("minimum withdrawal")) {
+        errorMsg += error.message;
+      } else {
+        errorMsg += "Please try again or contact support if the issue persists.";
+      }
+
+      await messengerService.sendTextMessage(
+        senderId,
+        `❌ ${errorMsg}\n\nError: ${error.message}\n\nType /sell to try again.`
+      );
+    }
   }
 
   // Handle /balance command
