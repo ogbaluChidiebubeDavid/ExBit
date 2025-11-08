@@ -183,15 +183,20 @@ I prefer simple language and direct instructions. I want iterative development w
 - ✅ More control, better for MVP testing
 
 ### 📋 Next Steps
-- **Immediate**: Manual testing with real Messenger account and small crypto amounts
-- **Next**: Test deposit detection → sell → Web3 transfer → Flutterwave payout end-to-end
+- **Immediate**: 
+  - ✅ Blockchain monitoring ENABLED with configurable safeguards
+  - ✅ Render deployment guide created (see RENDER_DEPLOYMENT_GUIDE.md)
+  - ✅ Local testing guide created (see LOCAL_TESTING_GUIDE.md)
+  - Ready for local testing OR Render deployment
+- **Testing**: 
+  - Local: Test deposit detection → sell → Web3 transfer → Flutterwave payout end-to-end
+  - Or deploy to Render and test in production environment
 - **Future Enhancements**: 
   - Database-level safeguard for negative balances (CHECK constraint or trigger)
   - Move balance aggregation to SQL using NUMERIC columns to prevent float rounding errors
   - Beneficiary save/reuse functionality
   - Transaction history viewing
   - Multiple language support
-  - Re-enable blockchain monitoring (currently disabled to prevent Alchemy rate limiting)
 
 ### Testing Phase (Weeks 5-8)
 - Test with friends/family

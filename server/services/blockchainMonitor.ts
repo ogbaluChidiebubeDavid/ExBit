@@ -101,8 +101,15 @@ class BlockchainMonitorService {
 
   constructor() {
     this.initializeProviders();
-    // Temporarily disabled to avoid Alchemy rate limits
-    // this.resumeMonitoringForExistingUsers();
+    
+    // Enable monitoring unless explicitly disabled
+    // Set DISABLE_BLOCKCHAIN_MONITORING=true to disable (useful for development)
+    if (process.env.DISABLE_BLOCKCHAIN_MONITORING !== "true") {
+      this.resumeMonitoringForExistingUsers();
+      console.log("[BlockchainMonitor] Blockchain monitoring ENABLED");
+    } else {
+      console.log("[BlockchainMonitor] Blockchain monitoring DISABLED (via env variable)");
+    }
   }
 
   // Initialize RPC providers for all blockchains
@@ -406,7 +413,7 @@ class BlockchainMonitorService {
             const nativeToken = (Object.keys(config.tokens) as Array<keyof typeof config.tokens>).find(
               k => {
                 const tokenValue = config.tokens[k];
-                return tokenValue === "native";
+                return (tokenValue as string) === "native";
               }
             ) as string || "ETH";
 
@@ -725,12 +732,12 @@ class BlockchainMonitorService {
 
       // Check native balance (ETH, BNB, MATIC, etc.)
       const tokenConfig = tokenSymbol ? config.tokens[tokenSymbol as keyof typeof config.tokens] : undefined;
-      const isNativeToken = tokenConfig === "native";
+      const isNativeToken = (tokenConfig as string) === "native";
       if (!tokenSymbol || isNativeToken) {
         const balance = await provider.getBalance(address);
         const formattedBalance = ethers.formatEther(balance);
         const nativeToken = (Object.keys(config.tokens) as Array<keyof typeof config.tokens>).find(k => {
-          return config.tokens[k] === "native";
+          return (config.tokens[k] as string) === "native";
         }) as string || "ETH";
         return {
           blockchain,
