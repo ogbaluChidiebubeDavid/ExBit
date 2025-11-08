@@ -101,7 +101,8 @@ class BlockchainMonitorService {
 
   constructor() {
     this.initializeProviders();
-    this.resumeMonitoringForExistingUsers();
+    // Temporarily disabled to avoid Alchemy rate limits
+    // this.resumeMonitoringForExistingUsers();
   }
 
   // Initialize RPC providers for all blockchains
