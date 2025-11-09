@@ -281,12 +281,38 @@ class WebChatHandler {
         `ExBit-${transaction.id}`
       );
 
-      // Update transaction with Flutterwave reference
+      // Map Flutterwave status to our transaction status
+      const fwStatus = transferResult.status;
+      let transactionStatus: "completed" | "processing" | "failed";
+      let shouldThrowError = false;
+      let errorMessage = "";
+      
+      if (fwStatus === "SUCCESSFUL" || fwStatus === "success") {
+        transactionStatus = "completed";
+        console.log(`[WebChat] Transfer successful for transaction ${transaction.id}`);
+      } else if (fwStatus === "FAILED" || fwStatus === "REJECTED" || fwStatus === "CANCELLED") {
+        transactionStatus = "failed";
+        shouldThrowError = true;
+        errorMessage = `Transfer ${fwStatus.toLowerCase()}. Please try again or contact support.`;
+        console.error(`[WebChat] Transfer ${fwStatus} for transaction ${transaction.id}. Flutterwave status: ${fwStatus}`);
+      } else {
+        // NEW, PENDING, or other statuses
+        transactionStatus = "processing";
+        console.warn(`[WebChat] Transfer initiated but pending approval. Status: ${fwStatus}. Transaction ${transaction.id} will remain in 'processing' state.`);
+        console.warn(`[WebChat] ⚠️ If auto-approval is disabled, go to Flutterwave dashboard to approve this transfer`);
+      }
+      
+      // Persist status to database BEFORE throwing any errors
       await db.update(webTransactions).set({
         flutterwaveReference: transferResult.reference,
-        status: "completed",
-        completedAt: new Date(),
+        status: transactionStatus,
+        completedAt: transactionStatus === "completed" ? new Date() : undefined,
       }).where(eq(webTransactions.id, transaction.id));
+      
+      // Now throw error if transfer failed (after database is updated)
+      if (shouldThrowError) {
+        throw new Error(errorMessage);
+      }
 
       // Update user state
       await db.update(webUsers).set({

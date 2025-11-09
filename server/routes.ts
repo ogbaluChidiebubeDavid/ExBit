@@ -1915,18 +1915,38 @@ export async function registerRoutes(app: Express): Promise<Server> {
           `exbit-${transaction.id}`
         );
 
-        console.log(`[Transfer] Transfer successful, reference: ${transferResult.reference}`);
+        console.log(`[Transfer] Transfer initiated, reference: ${transferResult.reference}, status: ${transferResult.status}`);
 
+        // Map Flutterwave status to our transaction status
+        const fwStatus = transferResult.status;
+        let transactionStatus: "completed" | "processing" | "failed";
+        let message: string;
+        
+        if (fwStatus === "SUCCESSFUL" || fwStatus === "success") {
+          transactionStatus = "completed";
+          message = "Transfer completed successfully";
+          console.log(`[Transfer] Transaction ${req.params.id} marked as completed`);
+        } else if (fwStatus === "FAILED" || fwStatus === "REJECTED" || fwStatus === "CANCELLED") {
+          transactionStatus = "failed";
+          message = `Transfer ${fwStatus.toLowerCase()}. Please contact support.`;
+          console.error(`[Transfer] Transaction ${req.params.id} ${fwStatus}. Flutterwave status: ${fwStatus}`);
+        } else {
+          // NEW, PENDING, or other statuses
+          transactionStatus = "processing";
+          message = "Transfer initiated and processing. Money will arrive in 2-30 minutes depending on your bank.";
+          console.warn(`[Transfer] Transaction ${req.params.id} kept in 'processing' state. Flutterwave status: ${fwStatus}`);
+          console.warn(`[Transfer] ⚠️ If auto-approval is disabled, go to Flutterwave dashboard to approve this transfer`);
+        }
+        
         await storage.updateTransaction(req.params.id, {
           flutterwaveReference: transferResult.reference,
-          status: "completed",
+          status: transactionStatus,
         });
-        
-        console.log(`[Transfer] Transaction ${req.params.id} marked as completed`);
         
         res.json({ 
           success: true, 
-          message: "Transfer completed successfully",
+          message,
+          status: transactionStatus,
           reference: transferResult.reference
         });
       } catch (error: any) {

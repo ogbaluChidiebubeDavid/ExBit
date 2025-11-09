@@ -121,7 +121,7 @@ export class FlutterwaveService {
     bankName: string,
     amount: number,
     reference: string
-  ): Promise<{ transferId: string; reference: string }> {
+  ): Promise<{ transferId: string; reference: string; status: string }> {
     if (!this.apiKey) {
       throw new Error("FLUTTERWAVE_SECRET_KEY is required for transfers");
     }
@@ -156,11 +156,20 @@ export class FlutterwaveService {
         const transferRef = response.data.data.reference || reference;
         const status = response.data.data.status;
         
-        console.log(`[Flutterwave] ✅ Transfer initiated - ID: ${transferId}, Reference: ${transferRef}, Status: ${status}`);
+        // Log detailed status information
+        if (status === "NEW" || status === "PENDING") {
+          console.warn(`[Flutterwave] ⚠️ Transfer requires approval - ID: ${transferId}, Status: ${status}`);
+          console.warn(`[Flutterwave] ⚠️ ACTION REQUIRED: Go to Flutterwave dashboard and approve this transfer, OR enable auto-approval in Settings > Business Settings > Team & Security`);
+        } else if (status === "SUCCESSFUL" || status === "success") {
+          console.log(`[Flutterwave] ✅ Transfer successful - ID: ${transferId}, Reference: ${transferRef}`);
+        } else {
+          console.log(`[Flutterwave] Transfer initiated - ID: ${transferId}, Reference: ${transferRef}, Status: ${status}`);
+        }
         
         return {
           transferId,
           reference: transferRef,
+          status,
         };
       }
 
