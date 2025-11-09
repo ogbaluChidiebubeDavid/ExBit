@@ -1303,7 +1303,7 @@ export async function registerRoutes(app: Express): Promise<Server> {
                   <span class="summary-value">\${summary.accountName}</span>
                 </div>
                 <div class="summary-row">
-                  <span class="summary-label">Fee (0.1%)</span>
+                  <span class="summary-label">Platform Fee</span>
                   <span class="summary-value">₦\${parseFloat(summary.platformFee).toFixed(2)}</span>
                 </div>
                 <div class="summary-row">
@@ -1507,7 +1507,7 @@ export async function registerRoutes(app: Express): Promise<Server> {
       // Calculate amounts
       const amount = parseFloat(data.amount);
       const nairaAmount = amount * nairaRate;
-      const platformFee = nairaAmount * 0.001; // 0.1% fee
+      const platformFee = Math.max(25, nairaAmount * 0.0075); // 0.75% fee with ₦25 minimum
       const netAmount = nairaAmount - platformFee;
       
       // Save to conversation state

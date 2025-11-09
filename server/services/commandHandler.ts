@@ -853,7 +853,7 @@ class CommandHandler {
 
     await messengerService.sendTextMessage(
       senderId,
-      `📋 Transaction Summary:\n\nSelling: ${data.amount} ${data.token} (${chainName})\nRate: ₦${rate.toFixed(2)}/${data.token}\nTotal: ₦${totalNaira.toFixed(2)}\nPlatform Fee (0.1%): ₦${platformFee.toFixed(2)}\n\n💰 You receive: ₦${netAmount.toFixed(2)}\n\n🏦 Bank Details:\n${data.bankName}\n${data.accountNumber}\n${data.accountName}\n\n🔐 Enter your 4-digit PIN to confirm:`
+      `📋 Transaction Summary:\n\nSelling: ${data.amount} ${data.token} (${chainName})\nRate: ₦${rate.toFixed(2)}/${data.token}\nTotal: ₦${totalNaira.toFixed(2)}\nPlatform Fee: ₦${platformFee.toFixed(2)}\n\n💰 You receive: ₦${netAmount.toFixed(2)}\n\n🏦 Bank Details:\n${data.bankName}\n${data.accountNumber}\n${data.accountName}\n\n🔐 Enter your 4-digit PIN to confirm:`
     );
   }
 
@@ -1322,7 +1322,7 @@ class CommandHandler {
         // Show confirmation message with exchange rate
         await messengerService.sendTextMessage(
           psid,
-          `💱 Selling ${data.amount} ${data.token}\n\n📊 Exchange Rate: ₦${parseFloat(data.nairaRate).toLocaleString()} per ${data.token}\n💰 You'll receive: ₦${parseFloat(data.netAmount).toLocaleString()}\n💵 Platform fee (0.1%): ₦${parseFloat(data.platformFee).toLocaleString()}\n\nNext, I need your bank details to complete the transfer.`
+          `💱 Selling ${data.amount} ${data.token}\n\n📊 Exchange Rate: ₦${parseFloat(data.nairaRate).toLocaleString()} per ${data.token}\n💰 You'll receive: ₦${parseFloat(data.netAmount).toLocaleString()}\n💵 Platform fee: ₦${parseFloat(data.platformFee).toLocaleString()}\n\nNext, I need your bank details to complete the transfer.`
         );
         
         await new Promise(resolve => setTimeout(resolve, 1500));

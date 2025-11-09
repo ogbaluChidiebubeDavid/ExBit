@@ -147,7 +147,7 @@ class WebChatHandler {
         try {
           const nairaRate = await priceService.getTokenPriceInNaira(swapRequest.token);
           const totalNaira = amount * nairaRate;
-          const platformFeeNaira = totalNaira * 0.001; // 0.1% fee
+          const platformFeeNaira = Math.max(25, totalNaira * 0.0075); // 0.75% fee with ₦25 minimum
           const netAmount = totalNaira - platformFeeNaira;
 
           // Save swap data to user session
