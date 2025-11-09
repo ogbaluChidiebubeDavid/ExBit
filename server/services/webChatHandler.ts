@@ -253,34 +253,39 @@ class WebChatHandler {
       // Create web transaction record
       const [transaction] = await db.insert(webTransactions).values({
         webUserId: user.id,
+        walletAddress: user.walletAddress,
         blockchain: swapData.blockchain,
         token: swapData.token,
         amount: swapData.amount,
         nairaAmount: swapData.nairaAmount,
+        exchangeRate: swapData.nairaRate,
         platformFee: swapData.platformFee,
-        netAmount: swapData.netAmount,
+        platformFeeNaira: swapData.platformFee,
+        netAmount: swapData.amount,
+        netNairaAmount: swapData.netAmount,
         bankName: bankDetails.bankName,
         accountNumber: bankDetails.accountNumber,
         accountName: bankDetails.accountName,
-        txHash,
+        transactionHash: txHash,
         status: "processing",
       }).returning();
 
       console.log(`[WebChat] Processing swap for transaction ${transaction.id}, txHash: ${txHash}`);
 
       // Trigger Flutterwave payout
-      const transferResult = await flutterwaveService.transferFunds(
-        parseFloat(swapData.netAmount),
+      const transferResult = await flutterwaveService.initiateTransfer(
         bankDetails.accountNumber,
-        bankDetails.bankName,
         bankDetails.accountName,
-        `ExBit swap ${transaction.id}`
+        bankDetails.bankName,
+        parseFloat(swapData.netAmount),
+        `ExBit-${transaction.id}`
       );
 
       // Update transaction with Flutterwave reference
       await db.update(webTransactions).set({
-        flutterwaveRef: transferResult.reference,
+        flutterwaveReference: transferResult.reference,
         status: "completed",
+        completedAt: new Date(),
       }).where(eq(webTransactions.id, transaction.id));
 
       // Update user state
