@@ -168,6 +168,8 @@ export const webUsers = pgTable("web_users", {
     nairaAmount?: string;
     platformFee?: string;
     netAmount?: string;
+  }>(),
+  bankDetails: json("bank_details").$type<{
     bankName?: string;
     accountNumber?: string;
     accountName?: string;
