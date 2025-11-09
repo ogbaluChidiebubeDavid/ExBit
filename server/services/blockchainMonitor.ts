@@ -102,13 +102,15 @@ class BlockchainMonitorService {
   constructor() {
     this.initializeProviders();
     
-    // Enable monitoring unless explicitly disabled
-    // Set DISABLE_BLOCKCHAIN_MONITORING=true to disable (useful for development)
-    if (process.env.DISABLE_BLOCKCHAIN_MONITORING !== "true") {
+    // TEMPORARILY DISABLED: Blockchain monitoring paused to save Alchemy quota
+    // Will re-enable after launch with proper rate limiting
+    const isDisabled = true; // Set to false to re-enable
+    
+    if (!isDisabled && process.env.DISABLE_BLOCKCHAIN_MONITORING !== "true") {
       this.resumeMonitoringForExistingUsers();
       console.log("[BlockchainMonitor] Blockchain monitoring ENABLED");
     } else {
-      console.log("[BlockchainMonitor] Blockchain monitoring DISABLED (via env variable)");
+      console.log("[BlockchainMonitor] Blockchain monitoring DISABLED - saving API quota for swaps");
     }
   }
 
