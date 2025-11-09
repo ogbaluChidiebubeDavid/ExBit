@@ -132,7 +132,7 @@ export class FlutterwaveService {
         throw new Error(`Bank code not found for ${bankName}`);
       }
 
-      console.log(`[Flutterwave] Initiating transfer of ₦${amount} to ${bankName}`);
+      console.log(`[Flutterwave] Initiating transfer of ₦${amount} to ${bankName} (${accountNumber})`);
 
       const response = await axios.post(
         `${this.baseUrl}/transfers`,
@@ -152,10 +152,15 @@ export class FlutterwaveService {
       console.log(`[Flutterwave] Transfer response:`, JSON.stringify(response.data, null, 2));
 
       if (response.data.status === "success" && response.data.data) {
-        console.log(`[Flutterwave] Transfer initiated successfully - ID: ${response.data.data.id}, Reference: ${response.data.data.reference}`);
+        const transferId = response.data.data.id.toString();
+        const transferRef = response.data.data.reference || reference;
+        const status = response.data.data.status;
+        
+        console.log(`[Flutterwave] ✅ Transfer initiated - ID: ${transferId}, Reference: ${transferRef}, Status: ${status}`);
+        
         return {
-          transferId: response.data.data.id.toString(),
-          reference: response.data.data.reference,
+          transferId,
+          reference: transferRef,
         };
       }
 
